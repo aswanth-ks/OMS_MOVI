@@ -82,20 +82,21 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-[#0F172A]">Email Address</label>
+                <label className="block text-sm font-medium text-[#0F172A]">Employee ID or Email</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#64748B]">
                     <Mail size={16} />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@movicloudlabs.com"
+                    placeholder="e.g. INT-2024-001 or email@domain.com"
                     required
                     className="w-full pl-9 pr-3 py-2 text-sm border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-colors"
                   />
                 </div>
+                <p className="text-[11px] text-[#64748B]">Use your Employee ID or registered email</p>
               </div>
 
               <div className="space-y-1.5">

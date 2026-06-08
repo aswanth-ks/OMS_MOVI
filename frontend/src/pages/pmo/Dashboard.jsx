@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
+import { Plus, CheckSquare, ClipboardCheck, BarChart2, GraduationCap, Clock } from 'lucide-react';
 
 // --- MOCK DATA ---
 const METRICS = [
@@ -44,7 +45,7 @@ export default function PMODashboard() {
 
   return (
     <PageWrapper>
-      <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-8 max-w-[1400px] mx-auto pb-12">
+      <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-5 max-w-[1400px] mx-auto pb-8">
         
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
@@ -70,48 +71,65 @@ export default function PMODashboard() {
         </div>
 
         {/* METRICS ROW */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {METRICS.map((metric, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-2xl border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-              <div className="absolute top-0 right-0 -mr-4 -mt-4 w-24 h-24 rounded-full opacity-5 bg-gradient-to-br from-transparent to-[#0F172A] group-hover:scale-110 transition-transform duration-500" />
+            <div key={idx} className="bg-white p-4 rounded-xl border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+              <div className="absolute top-0 right-0 -mr-4 -mt-4 w-20 h-20 rounded-full opacity-5 bg-gradient-to-br from-transparent to-[#0F172A] group-hover:scale-110 transition-transform duration-500" />
               
-              <div className="flex items-start justify-between mb-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${metric.bg} ${metric.color}`}>
-                  <span className="material-symbols-outlined text-[24px]">{metric.icon}</span>
+              <div className="flex items-start justify-between mb-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${metric.bg} ${metric.color}`}>
+                  <span className="material-symbols-outlined text-[20px]">{metric.icon}</span>
                 </div>
               </div>
               
-              <h3 className="text-[28px] font-bold text-[#0F172A] leading-none mb-1.5">{metric.value}</h3>
-              <p className="text-[13px] font-semibold text-[#64748B]">{metric.label}</p>
+              <h3 className="text-[24px] font-bold text-[#0F172A] leading-none mb-1">{metric.value}</h3>
+              <p className="text-[12px] font-semibold text-[#64748B]">{metric.label}</p>
               
-              <div className="mt-4 pt-4 border-t border-[#F1F5F9] flex items-center gap-1.5">
+              <div className="mt-3 pt-3 border-t border-[#F1F5F9] flex items-center gap-1.5">
                 <span className={`text-[11px] font-bold ${metric.color}`}>{metric.change}</span>
               </div>
             </div>
           ))}
         </div>
 
+        {/* QUICK ACTIONS ROW */}
+        <div className="flex gap-3 mt-1">
+          <button onClick={() => navigate('/pmo/projects')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
+            <Plus size={16} className="text-[#64748B]"/> New Project
+          </button>
+          <button onClick={() => navigate('/pmo/tasks')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
+            <CheckSquare size={16} className="text-[#64748B]"/> Assign Task
+          </button>
+          <button onClick={() => navigate('/pmo/approvals')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
+            <ClipboardCheck size={16} className="text-[#64748B]"/> Review Approvals
+            <span className="bg-[#FEF3C7] text-[#D97706] text-[10px] px-1.5 py-0.5 rounded-full ml-1">3</span>
+          </button>
+          <button onClick={() => navigate('/pmo/reports')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
+            <BarChart2 size={16} className="text-[#64748B]"/> Generate Report
+          </button>
+        </div>
+
         {/* MAIN CONTENT GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           
           {/* LEFT: PROJECT HEALTH GRID */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
-              <div className="px-6 py-5 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
-                <h2 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#64748B] text-[20px]">monitoring</span>
+          <div className="lg:col-span-2 space-y-5">
+            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
+              <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
+                <h2 className="text-[14px] font-bold text-[#0F172A] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#64748B] text-[18px]">monitoring</span>
                   Project Health & Progress
                 </h2>
                 <button 
                   onClick={() => navigate('/pmo/projects')}
-                  className="text-[12px] font-bold text-[#2563EB] hover:text-[#1D4ED8] transition-colors"
+                  className="text-[11px] font-bold text-[#2563EB] hover:text-[#1D4ED8] transition-colors"
                 >
                   View All Projects
                 </button>
               </div>
               
-              <div className="p-6">
-                <div className="space-y-5">
+              <div className="p-5">
+                <div className="space-y-4">
                   {PROJECTS.map(project => (
                     <div key={project.id} className="p-4 border border-[#E2E8F0] rounded-xl hover:border-[#CBD5E1] transition-colors bg-white group cursor-pointer">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -166,18 +184,18 @@ export default function PMODashboard() {
           </div>
 
           {/* RIGHT: RESOURCE & ACTIVITY SIDEBAR */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             
             {/* Resource Allocation Snapshot */}
-            <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                <h2 className="text-[14px] font-bold text-[#0F172A] flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#64748B] text-[18px]">pie_chart</span>
+            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                <h2 className="text-[13px] font-bold text-[#0F172A] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#64748B] text-[16px]">pie_chart</span>
                   Resource Allocation
                 </h2>
               </div>
-              <div className="p-5">
-                <div className="space-y-4">
+              <div className="p-4">
+                <div className="space-y-3">
                   <div>
                     <div className="flex justify-between text-[12px] font-bold text-[#0F172A] mb-1.5">
                       <span>Frontend Development</span>
@@ -207,8 +225,8 @@ export default function PMODashboard() {
                   </div>
                 </div>
                 
-                <div className="mt-5 pt-4 border-t border-[#E2E8F0]">
-                  <p className="text-[12px] text-[#64748B] leading-relaxed">
+                <div className="mt-4 pt-3 border-t border-[#E2E8F0]">
+                  <p className="text-[11px] text-[#64748B] leading-relaxed">
                     <strong className="text-[#0F172A]">Warning:</strong> Frontend resources are highly utilized. Consider reallocating tasks from Cloud Migration Phase 2.
                   </p>
                 </div>
@@ -216,15 +234,15 @@ export default function PMODashboard() {
             </div>
 
             {/* Recent PMO Activity */}
-            <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                <h2 className="text-[14px] font-bold text-[#0F172A] flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#64748B] text-[18px]">history</span>
+            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                <h2 className="text-[13px] font-bold text-[#0F172A] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#64748B] text-[16px]">history</span>
                   Recent PMO Activity
                 </h2>
               </div>
-              <div className="p-5">
-                <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px before:h-full before:w-0.5 before:bg-[#E2E8F0]">
+              <div className="p-4">
+                <div className="space-y-3 relative before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px before:h-full before:w-0.5 before:bg-[#E2E8F0]">
                   {RECENT_ACTIVITY.map((activity, idx) => (
                     <div key={idx} className="relative flex items-start gap-4">
                       <div className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center shrink-0 z-10 ${activity.bg} ${activity.color}`}>
@@ -241,6 +259,78 @@ export default function PMODashboard() {
                 </div>
                 <button className="w-full mt-4 py-2 border border-[#E2E8F0] rounded-lg text-[12px] font-bold text-[#0F172A] hover:bg-[#F8FAFC] transition-colors">
                   View Full Audit Log
+                </button>
+              </div>
+            </div>
+
+            {/* Intern Summary Widget */}
+            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
+                <h2 className="text-[13px] font-bold text-[#0F172A] flex items-center gap-2">
+                  <GraduationCap size={16} className="text-[#64748B]" />
+                  Intern Overview
+                </h2>
+                <span className="bg-[#EFF6FF] text-[#2563EB] text-[10px] font-bold px-2 py-0.5 rounded-full">5 Active</span>
+              </div>
+              <div className="p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">RM</div>
+                    <div className="flex-1">
+                      <p className="text-[13px] font-bold text-[#0F172A] leading-tight">Rahul Mehta</p>
+                      <span className="text-[10px] font-bold bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 rounded mt-0.5 inline-block">OWMS v2</span>
+                    </div>
+                    <div className="text-right w-12">
+                      <p className="text-[11px] font-bold text-[#0F172A] mb-1">66%</p>
+                      <div className="w-full h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden"><div className="h-full bg-[#10B981] rounded-full" style={{ width: '66%' }} /></div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold shrink-0">AI</div>
+                    <div className="flex-1">
+                      <p className="text-[13px] font-bold text-[#0F172A] leading-tight">Ananya Iyer</p>
+                      <span className="text-[10px] font-bold bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 rounded mt-0.5 inline-block">Mobile App</span>
+                    </div>
+                    <div className="text-right w-12">
+                      <p className="text-[11px] font-bold text-[#0F172A] mb-1">25%</p>
+                      <div className="w-full h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden"><div className="h-full bg-[#EF4444] rounded-full" style={{ width: '25%' }} /></div>
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => navigate('/pmo/interns')} className="w-full mt-4 py-2 border border-[#E2E8F0] rounded-lg text-[12px] font-bold text-[#2563EB] hover:bg-[#F8FAFC] transition-colors">
+                  View All Interns →
+                </button>
+              </div>
+            </div>
+
+            {/* Pending Approvals Widget */}
+            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
+                <h2 className="text-[13px] font-bold text-[#0F172A] flex items-center gap-2">
+                  <ClipboardCheck size={16} className="text-[#64748B]" />
+                  Pending Approvals
+                </h2>
+                <span className="bg-[#FEF3C7] text-[#D97706] text-[10px] font-bold px-2 py-0.5 rounded-full">3</span>
+              </div>
+              <div className="p-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded bg-[#EFF6FF] flex items-center justify-center shrink-0"><CheckSquare size={12} className="text-[#2563EB]" /></div>
+                      <div><p className="text-[12px] text-[#0F172A]">Task from <strong>Rahul M.</strong></p><p className="text-[10px] text-[#64748B]">2h ago</p></div>
+                    </div>
+                    <button onClick={() => navigate('/pmo/approvals')} className="text-[11px] font-bold text-[#2563EB] hover:underline">Review</button>
+                  </div>
+                  <div className="flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded bg-[#FFFBEB] flex items-center justify-center shrink-0"><Clock size={12} className="text-[#D97706]" /></div>
+                      <div><p className="text-[12px] text-[#0F172A]">Leave for <strong>Priya S.</strong></p><p className="text-[10px] text-[#64748B]">5h ago</p></div>
+                    </div>
+                    <button onClick={() => navigate('/pmo/approvals')} className="text-[11px] font-bold text-[#2563EB] hover:underline">Review</button>
+                  </div>
+                </div>
+                <button onClick={() => navigate('/pmo/approvals')} className="w-full mt-4 py-2 border border-[#E2E8F0] rounded-lg text-[12px] font-bold text-[#2563EB] hover:bg-[#F8FAFC] transition-colors">
+                  View All Approvals →
                 </button>
               </div>
             </div>

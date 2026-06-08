@@ -11,12 +11,10 @@ import Unauthorized from './pages/auth/Unauthorized';
 // Intern
 import InternDashboard from './pages/intern/Dashboard';
 import InternTasks from './pages/intern/Tasks';
-import InternStatus from './pages/intern/Status';
+import InternAttendance from './pages/intern/Attendance';
+import InternLeave from './pages/intern/Leave';
 import InternLearning from './pages/intern/Learning';
-import InternMessages from './pages/intern/Messages';
-import InternPerformance from './pages/intern/Performance';
-import InternPayments from './pages/intern/Payments';
-import InternDocuments from './pages/intern/Documents';
+import InternProfile from './pages/intern/Profile';
 
 // HR
 import HRDashboard from './pages/hr/Dashboard';
@@ -32,14 +30,20 @@ import HRPerformance from './pages/hr/Performance';
 import HRCommunication from './pages/hr/Communication';
 import HRAssignTask from './pages/hr/AssignTask';
 import HRTaskBoard from './pages/hr/TaskBoard';
+import HRProfile from './pages/hr/Profile';
 
 // PMO
 import PMODashboard from './pages/pmo/Dashboard';
 import PMOProjects from './pages/pmo/Projects';
+import PMOProjectDetails from './pages/pmo/ProjectDetails';
 import PMOTasks from './pages/pmo/Tasks';
 import PMOMonitoring from './pages/pmo/Monitoring';
 import PMOTimeline from './pages/pmo/Timeline';
 import PMOApprovals from './pages/pmo/Approvals';
+import PMOTeam from './pages/pmo/Team';
+import PMOInterns from './pages/pmo/Interns';
+import PMOReports from './pages/pmo/Reports';
+import PMOProfile from './pages/pmo/Profile';
 
 // Admin
 import AdminDashboard from './pages/admin/Dashboard';
@@ -81,12 +85,10 @@ export default function App() {
       {/* Intern */}
       <Route path="/intern/dashboard" element={<ProtectedRoute allowedRoles={['intern']}><InternDashboard /></ProtectedRoute>} />
       <Route path="/intern/tasks" element={<ProtectedRoute allowedRoles={['intern']}><InternTasks /></ProtectedRoute>} />
-      <Route path="/intern/status" element={<ProtectedRoute allowedRoles={['intern']}><InternStatus /></ProtectedRoute>} />
+      <Route path="/intern/attendance" element={<ProtectedRoute allowedRoles={['intern']}><InternAttendance /></ProtectedRoute>} />
+      <Route path="/intern/leave" element={<ProtectedRoute allowedRoles={['intern']}><InternLeave /></ProtectedRoute>} />
       <Route path="/intern/learning" element={<ProtectedRoute allowedRoles={['intern']}><InternLearning /></ProtectedRoute>} />
-      <Route path="/intern/messages" element={<ProtectedRoute allowedRoles={['intern']}><InternMessages /></ProtectedRoute>} />
-      <Route path="/intern/performance" element={<ProtectedRoute allowedRoles={['intern']}><InternPerformance /></ProtectedRoute>} />
-      <Route path="/intern/payments" element={<ProtectedRoute allowedRoles={['intern']}><InternPayments /></ProtectedRoute>} />
-      <Route path="/intern/documents" element={<ProtectedRoute allowedRoles={['intern']}><InternDocuments /></ProtectedRoute>} />
+      <Route path="/intern/profile" element={<ProtectedRoute allowedRoles={['intern']}><InternProfile /></ProtectedRoute>} />
 
       {/* HR */}
       <Route path="/hr/dashboard" element={<ProtectedRoute allowedRoles={['hr']}><HRDashboard /></ProtectedRoute>} />
@@ -102,14 +104,20 @@ export default function App() {
       <Route path="/hr/performance" element={<ProtectedRoute allowedRoles={['hr']}><HRPerformance /></ProtectedRoute>} />
       <Route path="/hr/communication" element={<ProtectedRoute allowedRoles={['hr']}><HRCommunication /></ProtectedRoute>} />
       <Route path="/hr/tasks/new" element={<ProtectedRoute allowedRoles={['hr']}><HRAssignTask /></ProtectedRoute>} />
+      <Route path="/hr/profile" element={<ProtectedRoute allowedRoles={['hr']}><HRProfile /></ProtectedRoute>} />
 
       {/* PMO */}
       <Route path="/pmo/dashboard" element={<ProtectedRoute allowedRoles={['pmo']}><PMODashboard /></ProtectedRoute>} />
       <Route path="/pmo/projects" element={<ProtectedRoute allowedRoles={['pmo']}><PMOProjects /></ProtectedRoute>} />
+      <Route path="/pmo/projects/:id" element={<ProtectedRoute allowedRoles={['pmo']}><PMOProjectDetails /></ProtectedRoute>} />
       <Route path="/pmo/tasks" element={<ProtectedRoute allowedRoles={['pmo']}><PMOTasks /></ProtectedRoute>} />
+      <Route path="/pmo/team" element={<ProtectedRoute allowedRoles={['pmo']}><PMOTeam /></ProtectedRoute>} />
+      <Route path="/pmo/interns" element={<ProtectedRoute allowedRoles={['pmo']}><PMOInterns /></ProtectedRoute>} />
       <Route path="/pmo/monitoring" element={<ProtectedRoute allowedRoles={['pmo']}><PMOMonitoring /></ProtectedRoute>} />
       <Route path="/pmo/timeline" element={<ProtectedRoute allowedRoles={['pmo']}><PMOTimeline /></ProtectedRoute>} />
       <Route path="/pmo/approvals" element={<ProtectedRoute allowedRoles={['pmo']}><PMOApprovals /></ProtectedRoute>} />
+      <Route path="/pmo/reports" element={<ProtectedRoute allowedRoles={['pmo']}><PMOReports /></ProtectedRoute>} />
+      <Route path="/pmo/profile" element={<ProtectedRoute allowedRoles={['pmo']}><PMOProfile /></ProtectedRoute>} />
 
       {/* Admin */}
       <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />

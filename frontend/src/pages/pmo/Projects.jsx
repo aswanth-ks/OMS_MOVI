@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
+import { Eye } from 'lucide-react';
 
 // --- MOCK DATA ---
 const MY_PROJECTS = [
@@ -33,6 +35,7 @@ const AVAILABLE_EMPLOYEES = [
 ];
 
 export default function PMOProjects() {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState('Active');
   const [search, setSearch] = useState('');
   
@@ -167,9 +170,17 @@ export default function PMOProjects() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#64748B] bg-[#F8FAFC] px-2.5 py-1.5 rounded-lg border border-[#E2E8F0]">
-                    <span className="material-symbols-outlined text-[14px]">event</span>
-                    {p.dueDate}
+                  <div className="flex gap-2">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#64748B] bg-[#F8FAFC] px-2.5 py-1.5 rounded-lg border border-[#E2E8F0]">
+                      <span className="material-symbols-outlined text-[14px]">event</span>
+                      {p.dueDate}
+                    </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/pmo/projects/${p.id}`); }}
+                      className="flex items-center gap-1.5 text-[11px] font-bold text-[#2563EB] hover:bg-[#EFF6FF] border border-transparent hover:border-[#BFDBFE] px-2.5 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Eye size={14} /> View Details
+                    </button>
                   </div>
                 </div>
               </div>

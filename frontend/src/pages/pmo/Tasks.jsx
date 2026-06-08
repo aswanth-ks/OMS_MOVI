@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
+import { TaskDetailModal } from '../../components/pmo/TaskDetailModal';
+import { GraduationCap, X } from 'lucide-react';
 
 // --- MOCK DATA ---
 const PROJECTS = [
@@ -36,6 +38,8 @@ export default function PMOTaskBoard() {
   const [tasks, setTasks] = useState(INITIAL_TASKS);
   const [draggedTask, setDraggedTask] = useState(null);
   const [selectedProject, setSelectedProject] = useState('p1');
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [internAssignTask, setInternAssignTask] = useState(null);
 
   // Drag and Drop
   const handleDragStart = (e, task) => {
@@ -114,8 +118,18 @@ export default function PMOTaskBoard() {
                         key={task.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, task)}
-                        className={`bg-white p-4 rounded-xl shadow-sm border transition-all cursor-grab active:cursor-grabbing group ${task.blocked ? 'border-[#FCA5A5] bg-[#FEF2F2]/50 hover:border-[#EF4444]' : 'border-[#E2E8F0] hover:border-[#CBD5E1] hover:shadow-md'}`}
+                        onClick={() => setSelectedTask(task)}
+                        className={`bg-white p-4 rounded-xl shadow-sm border transition-all cursor-pointer group relative ${task.blocked ? 'border-[#FCA5A5] bg-[#FEF2F2]/50 hover:border-[#EF4444]' : 'border-[#E2E8F0] hover:border-[#CBD5E1] hover:shadow-md'}`}
                       >
+                        {/* Assign to Intern Button (Hover) */}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setInternAssignTask(task); }}
+                          className="absolute -top-3 -right-3 w-8 h-8 bg-white border border-[#E2E8F0] rounded-full shadow-sm items-center justify-center text-[#64748B] hover:text-[#2563EB] hover:border-[#2563EB] transition-colors hidden group-hover:flex z-10"
+                          title="Assign to Intern"
+                        >
+                          <GraduationCap size={16} />
+                        </button>
+
                         {/* Tags */}
                         <div className="flex justify-between items-start mb-3">
                           <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${pStyles.bg} ${pStyles.color}`}>
@@ -164,6 +178,40 @@ export default function PMOTaskBoard() {
           })}
         </div>
       </div>
+
+      {/* Modals */}
+      {selectedTask && (
+        <TaskDetailModal 
+          task={selectedTask} 
+          onClose={() => setSelectedTask(null)} 
+        />
+      )}
+
+      {internAssignTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-900">Assign to Intern</h3>
+              <button onClick={() => setInternAssignTask(null)} className="text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-600 mb-2">Select an intern to assign to <strong>{internAssignTask.title}</strong>.</p>
+              <select className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-600">
+                <option>Select an intern...</option>
+                <option>Rahul Mehta (NIT Trichy)</option>
+                <option>Ananya Iyer (VIT Vellore)</option>
+              </select>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+              <button onClick={() => setInternAssignTask(null)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg">Cancel</button>
+              <button onClick={() => setInternAssignTask(null)} className="px-4 py-2 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-lg">Assign</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </PageWrapper>
   );
 }
