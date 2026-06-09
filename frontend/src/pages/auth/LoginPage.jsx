@@ -6,6 +6,7 @@ import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 const ROLE_HOME = { 
   intern: '/intern/dashboard', 
+  employee: '/employee/dashboard',
   hr: '/hr/dashboard', 
   pmo: '/pmo/dashboard', 
   admin: '/admin/dashboard',
@@ -91,7 +92,7 @@ export default function LoginPage() {
                     type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. INT-2024-001 or email@domain.com"
+                    placeholder="e.g. EMP-2024-001 or email@domain.com"
                     required
                     className="w-full pl-9 pr-3 py-2 text-sm border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-colors"
                   />
@@ -167,7 +168,8 @@ export default function LoginPage() {
                 { role: 'Admin', email: 'admin@owms.com', pass: 'admin123', color: 'bg-blue-100 text-blue-700 border-blue-200' },
                 { role: 'HR', email: 'hr@owms.com', pass: 'hr123', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
                 { role: 'PMO', email: 'pmo@owms.com', pass: 'pmo123', color: 'bg-purple-100 text-purple-700 border-purple-200' },
-                { role: 'Intern', email: 'intern@owms.com', pass: 'intern123', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+                { role: 'Employee', email: 'EMP-2024-003', pass: 'emp123', color: 'bg-sky-100 text-sky-700 border-sky-200' },
+                { role: 'Intern', email: 'INT-2024-001', pass: 'intern123', color: 'bg-orange-100 text-orange-700 border-orange-200' },
               ].map((acc) => (
                 <div 
                   key={acc.role} 

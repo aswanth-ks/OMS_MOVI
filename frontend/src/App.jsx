@@ -16,6 +16,15 @@ import InternLeave from './pages/intern/Leave';
 import InternLearning from './pages/intern/Learning';
 import InternProfile from './pages/intern/Profile';
 
+// Employee
+import EmployeeDashboard from './pages/employee/Dashboard';
+import EmployeeTasks from './pages/employee/Tasks';
+import EmployeeProjects from './pages/employee/Projects';
+import EmployeeTeam from './pages/employee/Team';
+import EmployeeAttendance from './pages/employee/Attendance';
+import EmployeeLeave from './pages/employee/Leave';
+import EmployeeProfile from './pages/employee/Profile';
+
 // HR
 import HRDashboard from './pages/hr/Dashboard';
 import HREmployees from './pages/hr/Employees';
@@ -89,6 +98,15 @@ export default function App() {
       <Route path="/intern/leave" element={<ProtectedRoute allowedRoles={['intern']}><InternLeave /></ProtectedRoute>} />
       <Route path="/intern/learning" element={<ProtectedRoute allowedRoles={['intern']}><InternLearning /></ProtectedRoute>} />
       <Route path="/intern/profile" element={<ProtectedRoute allowedRoles={['intern']}><InternProfile /></ProtectedRoute>} />
+
+      {/* Employee */}
+      <Route path="/employee/dashboard" element={<ProtectedRoute allowedRoles={['employee']}><EmployeeDashboard /></ProtectedRoute>} />
+      <Route path="/employee/tasks" element={<ProtectedRoute allowedRoles={['employee']}><EmployeeTasks /></ProtectedRoute>} />
+      <Route path="/employee/projects" element={<ProtectedRoute allowedRoles={['employee']}><EmployeeProjects /></ProtectedRoute>} />
+      <Route path="/employee/team" element={<ProtectedRoute allowedRoles={['employee']}><EmployeeTeam /></ProtectedRoute>} />
+      <Route path="/employee/attendance" element={<ProtectedRoute allowedRoles={['employee']}><EmployeeAttendance /></ProtectedRoute>} />
+      <Route path="/employee/leave" element={<ProtectedRoute allowedRoles={['employee']}><EmployeeLeave /></ProtectedRoute>} />
+      <Route path="/employee/profile" element={<ProtectedRoute allowedRoles={['employee']}><EmployeeProfile /></ProtectedRoute>} />
 
       {/* HR */}
       <Route path="/hr/dashboard" element={<ProtectedRoute allowedRoles={['hr']}><HRDashboard /></ProtectedRoute>} />
