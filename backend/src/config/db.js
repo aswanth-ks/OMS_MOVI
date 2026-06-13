@@ -1,19 +1,26 @@
-const mongoose = require('mongoose');
-const logger = require('../utils/logger');
-const createIndexes = require('./indexes');
+import mongoose from 'mongoose';
 
+/**
+ * MongoDB Connection
+ * Connects to MongoDB using MONGO_URI from env.
+ * Logs connection host on success, exits process on failure.
+ */
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
+    const conn = await mongoose.connect(process.env.MONGO_URI);
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+
+    mongoose.connection.on('error', (err) => {
+      console.error(`❌ MongoDB connection error: ${err.message}`);
     });
-    logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);
-    // Create indexes after connection
-    await createIndexes();
+
+    mongoose.connection.on('disconnected', () => {
+      console.warn('⚠️  MongoDB disconnected. Attempting reconnection...');
+    });
   } catch (error) {
-    logger.error(`❌ MongoDB Error: ${error.message}`);
+    console.error(`❌ MongoDB connection failed: ${error.message}`);
     process.exit(1);
   }
 };
 
-module.exports = connectDB;
+export default connectDB;

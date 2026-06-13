@@ -1,16 +1,64 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
-const taskSchema = new mongoose.Schema({
-  title: { type: String, required: true, trim: true },
-  description: { type: String },
-  type: { type: String, enum: ['Development', 'Design', 'Research', 'QA', 'Admin', 'Other'], default: 'Other' },
-  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
-  status: { type: String, enum: ['pending', 'in_progress', 'review', 'done', 'overdue'], default: 'pending' },
-  priority: { type: String, enum: ['Low', 'Medium', 'High', 'Critical'], default: 'Medium' },
-  dueDate: { type: Date },
-  completedAt: { type: Date },
+const { Schema } = mongoose;
+
+/**
+ * Task Model
+ * Tasks assigned to users within projects. Includes subtasks,
+ * comments, attachments, and full status history for audit.
+ */
+const TaskSchema = new Schema({
+  title: { type: String, required: true },
+  description: String,
+  project: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+  assignedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  assignedTo: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  priority: {
+    type: String,
+    enum: ['Critical', 'High', 'Medium', 'Low'],
+    default: 'Medium',
+  },
+  status: {
+    type: String,
+    enum: ['Todo', 'In Progress', 'In Review', 'Blocked', 'Done'],
+    default: 'Todo',
+  },
+  effortPoints: { type: Number, min: 1, max: 13 },
+  dueDate: Date,
+  submittedAt: Date,
+  approvedAt: Date,
+  approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  subtasks: [{
+    _id: { type: Schema.Types.ObjectId, auto: true },
+    title: String,
+    completed: { type: Boolean, default: false },
+  }],
+  comments: [{
+    _id: { type: Schema.Types.ObjectId, auto: true },
+    author: { type: Schema.Types.ObjectId, ref: 'User' },
+    text: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  }],
+  attachments: [{
+    name: String,
+    path: String,
+    size: String,
+    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    uploadedAt: { type: Date, default: Date.now },
+  }],
+  blockedReason: String,
+  statusHistory: [{
+    status: String,
+    changedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    changedAt: { type: Date, default: Date.now },
+  }],
 }, { timestamps: true });
 
-module.exports = mongoose.model('Task', taskSchema);
+// ─── Indexes ──────────────────────────────────────────────────────────────────
+TaskSchema.index({ assignedTo: 1 });
+TaskSchema.index({ project: 1 });
+TaskSchema.index({ status: 1 });
+TaskSchema.index({ dueDate: 1 });
+
+const Task = mongoose.model('Task', TaskSchema);
+export default Task;

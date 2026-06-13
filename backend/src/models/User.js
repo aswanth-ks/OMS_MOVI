@@ -1,41 +1,148 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
-const userSchema = new mongoose.Schema({
+const { Schema } = mongoose;
+
+/**
+ * User Model
+ * Central user model for all roles: Super Admin, Admin, HR Manager,
+ * PMO Lead, Employee, Intern. Role is a reference to the Role model.
+ */
+const UserSchema = new Schema({
+  employeeId: {
+    type: String,
+    unique: true,
+    sparse: true,
+    // Auto-generated: EMP-YYYY-XXX or INT-YYYY-XXX
+  },
   name: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true, minlength: 6 },
-  role: { type: String, enum: ['intern', 'hr', 'pmo', 'admin'], required: true },
-  username: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  bio: { type: String, maxlength: 300 },
-  college: { type: String },
-  joiningDate: { type: Date, default: Date.now },
-  isActive: { type: Boolean, default: true },
-  profileImage: { type: String },
-  githubLink: { type: String },
-  projectLink: { type: String },
-  project: { type: String, default: 'Not Assigned' },
-  bond: { type: Boolean, default: false },
-  nda: { type: Boolean, default: false },
-}, { timestamps: true });
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true,
+  },
+  password: {
+    type: String,
+    required: true,
+    minlength: 8,
+    select: false, // Never returned in queries by default
+  },
+  avatar: { type: String, default: null }, // file path
+  role: {
+    type: Schema.Types.ObjectId,
+    ref: 'Role',
+    required: true,
+  },
+  department: { type: Schema.Types.ObjectId, ref: 'Department' },
+  designation: { type: String },
+  employmentType: {
+    type: String,
+    enum: ['Full-time', 'Part-time', 'Contract', 'Intern'],
+    default: 'Full-time',
+  },
+  status: {
+    type: String,
+    enum: ['Active', 'Inactive', 'Suspended'],
+    default: 'Active',
+  },
+  manager: { type: Schema.Types.ObjectId, ref: 'User' },
+  hrManager: { type: Schema.Types.ObjectId, ref: 'User' },
 
-// Hash password before saving
-userSchema.pre('save', async function (next) {
+  // Intern-specific fields
+  college: String,
+  internshipStart: Date,
+  internshipEnd: Date,
+  mentor: { type: Schema.Types.ObjectId, ref: 'User' },
+  pmoLead: { type: Schema.Types.ObjectId, ref: 'User' },
+  performanceRatings: [{
+    week: Number,
+    rating: Number,
+    note: String,
+    addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    createdAt: { type: Date, default: Date.now }
+  }],
+
+  // Employee-specific
+  joinDate: Date,
+  skills: [String],
+
+  // HR & PMO Management
+  project: { type: Schema.Types.ObjectId, ref: 'Project' },
+  onboardingComplete: { type: Boolean, default: false },
+  onboardingChecklist: {
+    welcomeEmail: { type: Boolean, default: false },
+    idCardIssued: { type: Boolean, default: false },
+    systemAccess: { type: Boolean, default: false },
+    deptIntroduction: { type: Boolean, default: false },
+    equipmentAssigned: { type: Boolean, default: false },
+    hrDocumentation: { type: Boolean, default: false },
+    mentorAssigned: { type: Boolean, default: false },
+    firstWeekSchedule: { type: Boolean, default: false },
+  },
+  notes: [{
+    text: String,
+    addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    createdAt: { type: Date, default: Date.now },
+  }],
+
+  // Auth
+  lastLogin: Date,
+  loginAttempts: { type: Number, default: 0 },
+  lockUntil: Date,
+  passwordChangedAt: Date,
+  refreshToken: { type: String, select: false },
+
+  // Soft delete
+  deletedAt: Date,
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
+});
+
+// ─── Indexes ──────────────────────────────────────────────────────────────────
+UserSchema.index({ role: 1 });
+UserSchema.index({ department: 1 });
+UserSchema.index({ status: 1 });
+
+// ─── Virtual: avatar URL ──────────────────────────────────────────────────────
+UserSchema.virtual('avatarUrl').get(function () {
+  if (this.avatar) {
+    return `/uploads/avatars/${this.avatar}`;
+  }
+  return null;
+});
+
+// ─── Pre-save: hash password ──────────────────────────────────────────────────
+UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 12);
+  const rounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+  this.password = await bcrypt.hash(this.password, rounds);
+  this.passwordChangedAt = new Date();
   next();
 });
 
-// Compare password
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+// ─── Method: compare password ─────────────────────────────────────────────────
+UserSchema.methods.comparePassword = async function (entered) {
+  return await bcrypt.compare(entered, this.password);
 };
 
-// Remove password from JSON output
-userSchema.methods.toJSON = function () {
-  const obj = this.toObject();
-  delete obj.password;
-  return obj;
+// ─── Method: is account locked ────────────────────────────────────────────────
+UserSchema.methods.isLocked = function () {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
 };
 
-module.exports = mongoose.model('User', userSchema);
+// ─── Static: generate employee ID ─────────────────────────────────────────────
+UserSchema.statics.generateEmployeeId = async function (type) {
+  const prefix = type === 'Intern' ? 'INT' : 'EMP';
+  const year = new Date().getFullYear();
+  const count = await this.countDocuments({
+    employeeId: new RegExp(`^${prefix}-${year}`),
+  });
+  return `${prefix}-${year}-${String(count + 1).padStart(3, '0')}`;
+};
+
+const User = mongoose.model('User', UserSchema);
+export default User;

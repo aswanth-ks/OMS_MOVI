@@ -1,26 +1,45 @@
-const multer  = require('multer');
-const path    = require('path');
+import multer from 'multer';
+import path from 'path';
 
-// ─── Memory Storage ───────────────────────────────────────────────────────────
-// We no longer use Cloudinary or local disks. Files are buffered in memory and 
-// passed directly to the controller for storage in MongoDB.
-const storage = multer.memoryStorage();
+/**
+ * File Upload Middleware (Multer — Local Disk Storage)
+ * Stores files in ./uploads/{type}/ directories.
+ * Set req.uploadType before using: 'avatars', 'attachments', 'reports'
+ * Future: swap storage engine for Cloudinary/S3 without changing API.
+ */
 
-// ─── File type filter ──────────────────────────────────────────────────────────
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const type = req.uploadType || 'attachments';
+    cb(null, `./uploads/${type}/`);
+  },
+  filename: (req, file, cb) => {
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${unique}${path.extname(file.originalname)}`);
+  },
+});
+
 const fileFilter = (req, file, cb) => {
-  const allowed = /^(pdf|doc|docx|png|jpg|jpeg|xlsx|csv)$/i;
-  const ext = path.extname(file.originalname).slice(1); // strip leading dot
-  if (allowed.test(ext)) {
+  const allowed = /jpeg|jpg|png|pdf|xlsx|docx|csv/;
+  const ext = path.extname(file.originalname).toLowerCase();
+  const mime = allowed.test(file.mimetype);
+  if (allowed.test(ext) || mime) {
     cb(null, true);
   } else {
-    cb(new Error('File type not supported. Allowed: pdf, doc, docx, png, jpg, jpeg, xlsx, csv'), false);
+    cb(new Error('File type not allowed. Accepted: jpeg, jpg, png, pdf, xlsx, docx, csv'), false);
   }
 };
 
-const upload = multer({
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 10485760; // 10MB
+
+export const upload = multer({
   storage,
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 });
 
-module.exports = { upload };
+// Convenience middleware to set upload type
+export const setUploadType = (type) => (req, res, next) => {
+  req.uploadType = type;
+  next();
+};
