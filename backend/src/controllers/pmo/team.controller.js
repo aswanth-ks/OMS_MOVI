@@ -7,7 +7,22 @@ import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 export const getTeam = async (req, res, next) => {
   try {
     const projects = await Project.find({ ...req.projectFilter })
-      .populate('team.user', 'name designation avatar department employmentType');
+      .populate({
+        path: 'team.user',
+        select: 'name designation avatar department employmentType',
+        populate: {
+          path: 'department',
+          select: 'name code'
+        }
+      })
+      .populate({
+        path: 'interns.user',
+        select: 'name designation avatar department employmentType',
+        populate: {
+          path: 'department',
+          select: 'name code'
+        }
+      });
     
     const projectIds = projects.map(p => p._id);
     const membersMap = new Map();

@@ -362,3 +362,23 @@ export const updateMilestone = async (req, res, next) => {
     next(error);
   }
 };
+
+export const deleteProject = async (req, res, next) => {
+  try {
+    const project = await Project.findOne({ _id: req.params.id, ...req.projectFilter });
+    if (!project) return sendError(res, 'Project not found', 404);
+
+    // Delete all tasks under this project
+    await Task.deleteMany({ project: project._id });
+
+    // Disassociate interns assigned to this project
+    await User.updateMany({ project: project._id }, { $unset: { project: 1 } });
+
+    // Delete the project
+    await Project.deleteOne({ _id: project._id });
+
+    sendSuccess(res, null, 'Project deleted successfully');
+  } catch (error) {
+    next(error);
+  }
+};

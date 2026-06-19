@@ -67,6 +67,15 @@ const UserSchema = new Schema({
   // Employee-specific
   joinDate: Date,
   skills: [String],
+  phone: String,
+  address: String,
+  linkedIn: String,
+  emergencyContact: {
+    name: String,
+    phone: String,
+    relation: String,
+  },
+  bio: String,
 
   // HR & PMO Management
   project: { type: Schema.Types.ObjectId, ref: 'Project' },

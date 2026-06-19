@@ -17,12 +17,17 @@ export const getProfile = async (req, res, next) => {
 
 export const updateProfile = async (req, res, next) => {
   try {
-    const { skills, avatar } = req.body;
+    const { skills, avatar, phone, address, linkedIn, emergencyContact, bio } = req.body;
     
     // Only whitelist safe fields
     const updateData = {};
     if (skills) updateData.skills = skills;
     if (avatar) updateData.avatar = avatar;
+    if (phone !== undefined) updateData.phone = phone;
+    if (address !== undefined) updateData.address = address;
+    if (linkedIn !== undefined) updateData.linkedIn = linkedIn;
+    if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
+    if (bio !== undefined) updateData.bio = bio;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,

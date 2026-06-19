@@ -34,6 +34,7 @@ import pmoTeamRoutes from './routes/pmo/team.routes.js';
 import pmoInternsRoutes from './routes/pmo/interns.routes.js';
 import pmoApprovalsRoutes from './routes/pmo/approvals.routes.js';
 import pmoReportsRoutes from './routes/pmo/reports.routes.js';
+import pmoDashboardRoutes from './routes/pmo/dashboard.routes.js';
 
 import empProfileRoutes from './routes/employee/profile.routes.js';
 import empTasksRoutes from './routes/employee/tasks.routes.js';
@@ -145,6 +146,7 @@ app.use('/api/hr/interns', hrInternsRoutes);
 app.use('/api/hr/reports', hrReportsRoutes);
 
 // PMO Module
+app.use('/api/pmo/dashboard', pmoDashboardRoutes);
 app.use('/api/pmo/projects', pmoProjectsRoutes);
 app.use('/api/pmo/tasks', pmoTasksRoutes);
 app.use('/api/pmo/team', pmoTeamRoutes);

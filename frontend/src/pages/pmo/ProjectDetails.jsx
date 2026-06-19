@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChevronRight, Pencil, Download, Archive, Trash2, CheckSquare, Clock, AlertCircle, 
-  Users, GraduationCap, Flag, FileText, Plus, UserPlus, File, Eye 
+  Users, GraduationCap, Flag, FileText, Plus, UserPlus, File, Eye, X 
 } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
 import { TaskDetailModal } from '../../components/pmo/TaskDetailModal';
@@ -24,6 +24,22 @@ export default function ProjectDetails() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Modals visibility states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isInternModalOpen, setIsInternModalOpen] = useState(false);
+
+  // Modals form states
+  const [editData, setEditData] = useState({ name: '', description: '', status: 'Planning', priority: 'Medium', dueDate: '' });
+  const [milestoneData, setMilestoneData] = useState({ name: '', date: '' });
+  const [taskData, setTaskData] = useState({ title: '', description: '', assignedTo: '', priority: 'Medium', effortPoints: 5, dueDate: '' });
+  const [availablePool, setAvailablePool] = useState([]);
+  const [selectedMembers, setSelectedMembers] = useState([]);
+  const [selectedInterns, setSelectedInterns] = useState([]);
+
   const TABS = ['Overview', 'Tasks', 'Team', 'Interns', 'Timeline', 'Files', 'Activity'];
 
   const fetchProjectDetails = async () => {
@@ -41,9 +57,210 @@ export default function ProjectDetails() {
     }
   };
 
+  const fetchAvailablePool = async () => {
+    try {
+      const res = await pmoAPI.getAvailableMembers();
+      setAvailablePool(res.data.data || []);
+    } catch (err) {
+      console.warn('Failed to load available employees');
+    }
+  };
+
   useEffect(() => {
     fetchProjectDetails();
   }, [id]);
+
+  useEffect(() => {
+    if (project) {
+      setEditData({
+        name: project.name || '',
+        description: project.description || '',
+        status: project.status || 'Planning',
+        priority: project.priority || 'Medium',
+        dueDate: project.endDate ? project.endDate.substring(0, 10) : ''
+      });
+    }
+  }, [project]);
+
+  // Submit Handlers
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        name: editData.name,
+        description: editData.description,
+        status: editData.status,
+        priority: editData.priority,
+        endDate: editData.dueDate ? new Date(editData.dueDate) : undefined
+      };
+      await pmoAPI.updateProject(id, payload);
+      toast.success('Project details updated successfully');
+      setIsEditModalOpen(false);
+      fetchProjectDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update project');
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      await pmoAPI.deleteProject(id);
+      toast.success('Project deleted successfully');
+      setIsDeleteModalOpen(false);
+      navigate('/pmo/projects');
+    } catch (err) {
+      toast.error('Failed to delete project');
+    }
+  };
+
+  const handleArchiveConfirm = async () => {
+    if (window.confirm(`Are you sure you want to archive "${project.name}"? This will mark the project as Completed.`)) {
+      try {
+        await pmoAPI.updateProject(id, { status: 'Completed' });
+        toast.success('Project archived successfully');
+        fetchProjectDetails();
+      } catch (err) {
+        toast.error('Failed to archive project');
+      }
+    }
+  };
+
+  const handleMilestoneSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await pmoAPI.addProjectMilestone(id, {
+        name: milestoneData.name,
+        date: new Date(milestoneData.date)
+      });
+      toast.success('Milestone added successfully');
+      setMilestoneData({ name: '', date: '' });
+      setIsMilestoneModalOpen(false);
+      fetchProjectDetails();
+    } catch (err) {
+      toast.error('Failed to add milestone');
+    }
+  };
+
+  const handleTaskSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...taskData,
+        project: id,
+        dueDate: new Date(taskData.dueDate)
+      };
+      await pmoAPI.createTask(payload);
+      toast.success('Task created and assigned successfully');
+      setTaskData({ title: '', description: '', assignedTo: '', priority: 'Medium', effortPoints: 5, dueDate: '' });
+      setIsTaskModalOpen(false);
+      fetchProjectDetails();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create task');
+    }
+  };
+
+  const handleTeamSubmit = async () => {
+    try {
+      const payload = selectedMembers.map(userId => {
+        const emp = availablePool.find(e => e._id === userId);
+        return {
+          userId,
+          role: emp?.designation || 'Developer'
+        };
+      });
+      await pmoAPI.addProjectTeam(id, payload);
+      toast.success('Team members allocated successfully');
+      setSelectedMembers([]);
+      setIsTeamModalOpen(false);
+      fetchProjectDetails();
+    } catch (err) {
+      toast.error('Failed to allocate team members');
+    }
+  };
+
+  const handleInternSubmit = async () => {
+    try {
+      await pmoAPI.assignProjectInterns(id, selectedInterns);
+      toast.success('Interns assigned successfully');
+      setSelectedInterns([]);
+      setIsInternModalOpen(false);
+      fetchProjectDetails();
+    } catch (err) {
+      toast.error('Failed to assign interns');
+    }
+  };
+
+  const handleExportReport = () => {
+    if (!project) return;
+    
+    const projectData = [
+      { Field: 'Project Code', Value: project.code || 'N/A' },
+      { Field: 'Project Name', Value: project.name || 'N/A' },
+      { Field: 'Description', Value: project.description || 'N/A' },
+      { Field: 'Status', Value: project.status || 'N/A' },
+      { Field: 'Priority', Value: project.priority || 'N/A' },
+      { Field: 'Project Manager', Value: project.manager?.name || 'N/A' },
+      { Field: 'Department', Value: project.department?.name || 'N/A' },
+      { Field: 'Start Date', Value: project.startDate ? new Date(project.startDate).toLocaleDateString() : 'N/A' },
+      { Field: 'End Date', Value: project.endDate ? new Date(project.endDate).toLocaleDateString() : 'N/A' },
+      { Field: 'Budget Allocated', Value: `₹${(project.budget?.allocated || project.budget || 0).toLocaleString()}` },
+      { Field: 'Budget Spent', Value: `₹${(project.budget?.spent || project.budgetSpent || 0).toLocaleString()}` },
+      { Field: 'Completion Percentage', Value: `${project.completionPercent || 0}%` }
+    ];
+
+    const tasksData = tasks.map(t => ({
+      TaskID: t._id,
+      TaskTitle: t.title,
+      Assignee: t.assignedTo?.name || 'Unassigned',
+      Status: t.status,
+      Priority: t.priority,
+      EffortPoints: t.effortPoints || 0,
+      DueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'
+    }));
+
+    const teamData = (project.team || []).map(m => ({
+      MemberName: m.user?.name || 'Unknown',
+      RoleInProject: m.role || 'Developer',
+      Designation: m.user?.designation || 'Staff'
+    }));
+
+    const milestonesData = (project.milestones || []).map(m => ({
+      MilestoneName: m.name,
+      TargetDate: m.date ? new Date(m.date).toLocaleDateString() : 'N/A',
+      Status: m.status
+    }));
+
+    const separator = ',';
+    
+    const buildCSVSection = (title, headers, data) => {
+      if (!data || !data.length) return `${title}\nNo data available\n\n`;
+      const headerRow = headers.join(separator);
+      const rows = data.map(row => headers.map(k => {
+        let cell = row[k] === null || row[k] === undefined ? '' : row[k];
+        cell = typeof cell === 'object' ? JSON.stringify(cell).replace(/"/g, '""') : cell.toString().replace(/"/g, '""');
+        if (cell.search(/("|,|\n)/g) >= 0) cell = `"${cell}"`;
+        return cell;
+      }).join(separator));
+      return `${title}\n${headerRow}\n${rows.join('\n')}\n\n`;
+    };
+
+    let csvContent = '';
+    csvContent += buildCSVSection('PROJECT DETAILS', ['Field', 'Value'], projectData);
+    csvContent += buildCSVSection('PROJECT TEAM', ['MemberName', 'RoleInProject', 'Designation'], teamData);
+    csvContent += buildCSVSection('PROJECT MILESTONES', ['MilestoneName', 'TargetDate', 'Status'], milestonesData);
+    csvContent += buildCSVSection('PROJECT TASKS', ['TaskTitle', 'Assignee', 'Status', 'Priority', 'EffortPoints', 'DueDate'], tasksData);
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${project.name.toLowerCase().replace(/\s+/g, '_')}_project_report.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Project report exported successfully');
+  };
 
   // Compute stats for team members based on project tasks
   const teamWithTaskStats = (project?.team || []).map(member => {
@@ -51,7 +268,6 @@ export default function ProjectDetails() {
     const tasksAssigned = memberTasks.length;
     const tasksDone = memberTasks.filter(t => t.status === 'Done').length;
     
-    // Simple mock workload mapping if not present
     const workload = memberTasks.filter(t => t.status !== 'Done').length * 15;
 
     return {
@@ -96,13 +312,63 @@ export default function ProjectDetails() {
 
     switch (activeTab) {
       case 'Overview':
-        return <OverviewTab project={project} team={teamWithTaskStats} />;
+        return (
+          <OverviewTab 
+            project={project} 
+            team={teamWithTaskStats} 
+            onAddMilestoneClick={() => setIsMilestoneModalOpen(true)}
+            onAddTaskClick={() => {
+              setTaskData(prev => ({ ...prev, assignedTo: '' }));
+              setIsTaskModalOpen(true);
+            }}
+            onAddTeamMemberClick={() => {
+              fetchAvailablePool();
+              setIsTeamModalOpen(true);
+            }}
+            onAssignInternClick={() => {
+              fetchAvailablePool();
+              setIsInternModalOpen(true);
+            }}
+            onExportReportClick={handleExportReport}
+          />
+        );
       case 'Tasks':
-        return <TasksTab tasks={tasks} onTaskClick={setSelectedTask} />;
+        return (
+          <TasksTab 
+            tasks={tasks} 
+            onTaskClick={setSelectedTask} 
+            onAddTaskClick={() => {
+              setTaskData(prev => ({ ...prev, assignedTo: '' }));
+              setIsTaskModalOpen(true);
+            }}
+          />
+        );
       case 'Team':
-        return <TeamTab team={teamWithTaskStats} navigate={navigate} />;
+        return (
+          <TeamTab 
+            team={teamWithTaskStats} 
+            navigate={navigate} 
+            onAddTeamMemberClick={() => {
+              fetchAvailablePool();
+              setIsTeamModalOpen(true);
+            }}
+            onAssignTaskClick={(memberId) => {
+              setTaskData(prev => ({ ...prev, assignedTo: memberId }));
+              setIsTaskModalOpen(true);
+            }}
+          />
+        );
       case 'Interns':
-        return <InternsTab interns={internsWithTaskStats} navigate={navigate} />;
+        return (
+          <InternsTab 
+            interns={internsWithTaskStats} 
+            navigate={navigate} 
+            onAssignInternClick={() => {
+              fetchAvailablePool();
+              setIsInternModalOpen(true);
+            }}
+          />
+        );
       case 'Timeline':
         return <TimelineTab project={project} />;
       case 'Files':
@@ -136,11 +402,13 @@ export default function ProjectDetails() {
     );
   }
 
-  // Calculate task counts
-  const totalTasksCount = project.tasks?.total ?? tasks.length;
-  const completedTasksCount = project.tasks?.done ?? tasks.filter(t => t.status === 'Done').length;
-  const inProgressTasksCount = project.tasks?.inProgress ?? tasks.filter(t => t.status === 'In Progress').length;
-  const overdueTasksCount = project.tasks?.overdue ?? 0;
+  const totalTasksCount = tasks.length;
+  const completedTasksCount = tasks.filter(t => t.status === 'Done').length;
+  const inProgressTasksCount = tasks.filter(t => t.status === 'In Progress').length;
+  const overdueTasksCount = tasks.filter(t => {
+    const now = new Date();
+    return t.dueDate && new Date(t.dueDate) < now && t.status !== 'Done';
+  }).length;
 
   return (
     <PageWrapper>
@@ -173,16 +441,16 @@ export default function ProjectDetails() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="px-3 py-1.5 text-sm font-semibold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg border border-transparent transition-colors flex items-center gap-2">
+              <button onClick={() => setIsEditModalOpen(true)} className="px-3 py-1.5 text-sm font-semibold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] transition-colors flex items-center gap-2 bg-white shadow-sm">
                 <Pencil size={16} /> Edit Project
               </button>
-              <button className="px-3 py-1.5 text-sm font-semibold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg border border-transparent transition-colors flex items-center gap-2">
+              <button onClick={handleExportReport} className="px-3 py-1.5 text-sm font-semibold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] transition-colors flex items-center gap-2 bg-white shadow-sm">
                 <Download size={16} /> Export Report
               </button>
-              <button className="px-3 py-1.5 text-sm font-semibold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg border border-transparent transition-colors flex items-center gap-2">
+              <button onClick={handleArchiveConfirm} className="px-3 py-1.5 text-sm font-semibold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] transition-colors flex items-center gap-2 bg-white shadow-sm">
                 <Archive size={16} /> Archive
               </button>
-              <button className="px-3 py-1.5 text-sm font-semibold text-[#DC2626] border border-[#DC2626] hover:bg-[#FEF2F2] rounded-lg transition-colors flex items-center gap-2">
+              <button onClick={() => setIsDeleteModalOpen(true)} className="px-3 py-1.5 text-sm font-semibold text-[#DC2626] border border-[#DC2626] hover:bg-[#FEF2F2] rounded-lg transition-colors flex items-center gap-2 bg-white shadow-sm">
                 <Trash2 size={16} /> Delete
               </button>
             </div>
@@ -230,12 +498,264 @@ export default function ProjectDetails() {
         </div>
       </div>
 
-      {/* Task Modal */}
+      {/* Task Modal details */}
       {selectedTask && (
         <TaskDetailModal 
           task={selectedTask} 
           onClose={() => setSelectedTask(null)} 
         />
+      )}
+
+      {/* --- EDIT PROJECT MODAL --- */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-md overflow-hidden flex flex-col text-left">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
+              <h3 className="font-bold text-[#0F172A] flex items-center gap-2">
+                <Pencil size={18} className="text-[#2563EB]" /> Edit Project
+              </h3>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Project Name</label>
+                  <input type="text" required value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Description</label>
+                  <textarea rows="3" value={editData.description} onChange={e => setEditData({...editData, description: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none resize-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Status</label>
+                    <select value={editData.status} onChange={e => setEditData({...editData, status: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none cursor-pointer">
+                      <option value="Planning">Planning</option>
+                      <option value="Active">Active</option>
+                      <option value="On Hold">On Hold</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Priority</label>
+                    <select value={editData.priority} onChange={e => setEditData({...editData, priority: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none cursor-pointer">
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Due Date</label>
+                  <input type="date" value={editData.dueDate} onChange={e => setEditData({...editData, dueDate: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none" />
+                </div>
+              </div>
+              <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE PROJECT MODAL --- */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-sm overflow-hidden flex flex-col text-left">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#FEF2F2] flex justify-between items-center">
+              <h3 className="font-bold text-[#DC2626] flex items-center gap-2">
+                <Trash2 size={18} /> Delete Project
+              </h3>
+              <button onClick={() => setIsDeleteModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-[#475569] leading-relaxed">Are you sure you want to delete <strong>{project.name}</strong>? This action cannot be undone. All tasks associated with this project will be deleted permanently.</p>
+            </div>
+            <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2">
+              <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
+              <button onClick={handleDeleteConfirm} className="px-4 py-2 text-sm font-bold bg-[#DC2626] text-white hover:bg-red-700 rounded-lg">Delete Project</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- ADD MILESTONE MODAL --- */}
+      {isMilestoneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-md overflow-hidden flex flex-col text-left">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
+              <h3 className="font-bold text-[#0F172A] flex items-center gap-2">
+                <Flag size={18} className="text-[#2563EB]" /> Add Milestone
+              </h3>
+              <button onClick={() => setIsMilestoneModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
+            </div>
+            <form onSubmit={handleMilestoneSubmit}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Milestone Name</label>
+                  <input type="text" required value={milestoneData.name} onChange={e => setMilestoneData({...milestoneData, name: e.target.value})} placeholder="e.g. Beta Release" className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Target Date</label>
+                  <input type="date" required value={milestoneData.date} onChange={e => setMilestoneData({...milestoneData, date: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none" />
+                </div>
+              </div>
+              <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2">
+                <button type="button" onClick={() => setIsMilestoneModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg">Add Milestone</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- ADD TASK MODAL --- */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-md overflow-hidden flex flex-col text-left">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
+              <h3 className="font-bold text-[#0F172A] flex items-center gap-2">
+                <Plus size={18} className="text-[#2563EB]" /> Add Project Task
+              </h3>
+              <button onClick={() => setIsTaskModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
+            </div>
+            <form onSubmit={handleTaskSubmit}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Task Title</label>
+                  <input type="text" required value={taskData.title} onChange={e => setTaskData({...taskData, title: e.target.value})} placeholder="e.g. Build backend routes" className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Description</label>
+                  <textarea rows="3" value={taskData.description} onChange={e => setTaskData({...taskData, description: e.target.value})} placeholder="Provide details about delivery scope..." className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none resize-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Assign To Member / Intern</label>
+                  <select required value={taskData.assignedTo} onChange={e => setTaskData({...taskData, assignedTo: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none cursor-pointer">
+                    <option value="">Select assignee...</option>
+                    {[...(project.team || []), ...(project.interns || [])].map(m => m.user && (
+                      <option key={m.user._id} value={m.user._id}>{m.user.name} ({m.role || (m.user.employmentType === 'Intern' ? 'Intern' : 'Developer')})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Priority</label>
+                    <select value={taskData.priority} onChange={e => setTaskData({...taskData, priority: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none cursor-pointer">
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Effort Points</label>
+                    <input type="number" min="1" max="13" required value={taskData.effortPoints} onChange={e => setTaskData({...taskData, effortPoints: parseInt(e.target.value)})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Due Date</label>
+                  <input type="date" required value={taskData.dueDate} onChange={e => setTaskData({...taskData, dueDate: e.target.value})} className="w-full p-2.5 bg-white border border-[#E2E8F0] rounded-lg text-sm focus:border-[#2563EB] outline-none" />
+                </div>
+              </div>
+              <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2">
+                <button type="button" onClick={() => setIsTaskModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg">Create Task</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- ALLOCATE TEAM MEMBER MODAL --- */}
+      {isTeamModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[70vh] text-left">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-[#0F172A] flex items-center gap-2">
+                <UserPlus size={18} className="text-[#2563EB]" /> Add Team Member
+              </h3>
+              <button onClick={() => setIsTeamModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              <p className="text-xs text-[#64748B] mb-2">Select employees from the company directory to allocate to this project:</p>
+              {availablePool.filter(emp => emp.employmentType !== 'Intern' && !project.team.some(t => t.user?._id === emp._id)).map(emp => {
+                const isChecked = selectedMembers.some(id => id === emp._id);
+                return (
+                  <div key={emp._id} className="flex items-center justify-between p-3 border border-[#E2E8F0] rounded-xl bg-[#F8FAFC]">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" checked={isChecked} onChange={() => {
+                        if (isChecked) {
+                          setSelectedMembers(selectedMembers.filter(id => id !== emp._id));
+                        } else {
+                          setSelectedMembers([...selectedMembers, emp._id]);
+                        }
+                      }} className="w-4 h-4 text-[#2563EB] border-[#E2E8F0] rounded cursor-pointer" />
+                      <div>
+                        <p className="text-sm font-bold text-[#0F172A]">{emp.name}</p>
+                        <p className="text-xs text-[#64748B]">{emp.designation || 'Staff'}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {availablePool.filter(emp => emp.employmentType !== 'Intern' && !project.team.some(t => t.user?._id === emp._id)).length === 0 && (
+                <p className="text-center py-10 text-xs text-[#64748B] italic">No available team members in department pool.</p>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2 shrink-0">
+              <button onClick={() => setIsTeamModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
+              <button onClick={handleTeamSubmit} disabled={selectedMembers.length === 0} className="px-4 py-2 text-sm font-bold bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Allocate Members</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- ASSIGN INTERN MODAL --- */}
+      {isInternModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[70vh] text-left">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-[#0F172A] flex items-center gap-2">
+                <GraduationCap size={18} className="text-[#2563EB]" /> Assign Intern
+              </h3>
+              <button onClick={() => setIsInternModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              <p className="text-xs text-[#64748B] mb-2">Select interns to assign to this project:</p>
+              {availablePool.filter(emp => emp.employmentType === 'Intern' && !project.interns.some(i => i.user?._id === emp._id)).map(intern => {
+                const isChecked = selectedInterns.some(id => id === intern._id);
+                return (
+                  <div key={intern._id} className="flex items-center justify-between p-3 border border-[#E2E8F0] rounded-xl bg-[#F8FAFC]">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" checked={isChecked} onChange={() => {
+                        if (isChecked) {
+                          setSelectedInterns(selectedInterns.filter(id => id !== intern._id));
+                        } else {
+                          setSelectedInterns([...selectedInterns, intern._id]);
+                        }
+                      }} className="w-4 h-4 text-[#2563EB] border-[#E2E8F0] rounded cursor-pointer" />
+                      <div>
+                        <p className="text-sm font-bold text-[#0F172A]">{intern.name}</p>
+                        <p className="text-xs text-[#64748B]">{intern.college || 'Intern'}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {availablePool.filter(emp => emp.employmentType === 'Intern' && !project.interns.some(i => i.user?._id === emp._id)).length === 0 && (
+                <p className="text-center py-10 text-xs text-[#64748B] italic">No available interns in pool.</p>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2 shrink-0">
+              <button onClick={() => setIsInternModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
+              <button onClick={handleInternSubmit} disabled={selectedInterns.length === 0} className="px-4 py-2 text-sm font-bold bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Assign Interns</button>
+            </div>
+          </div>
+        </div>
       )}
     </PageWrapper>
   );
@@ -243,7 +763,7 @@ export default function ProjectDetails() {
 
 // --- TAB COMPONENTS ---
 
-const OverviewTab = ({ project, team }) => {
+const OverviewTab = ({ project, team, onAddMilestoneClick, onAddTaskClick, onAddTeamMemberClick, onAssignInternClick, onExportReportClick }) => {
   const managerName = project.manager?.name || 'Unknown PMO';
   const managerAvatar = project.manager?.avatar || managerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const deptName = project.department?.name || 'Engineering';
@@ -304,7 +824,7 @@ const OverviewTab = ({ project, team }) => {
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-sm">
           <h3 className="text-base font-bold text-[#0F172A] mb-4">Milestones</h3>
           <MilestoneTimeline milestones={project.milestones || []} />
-          <button className="mt-6 w-full py-2.5 border-2 border-dashed border-[#E2E8F0] text-[#64748B] font-bold text-sm rounded-lg hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors flex items-center justify-center gap-2">
+          <button onClick={onAddMilestoneClick} className="mt-6 w-full py-2.5 border-2 border-dashed border-[#E2E8F0] text-[#64748B] font-bold text-sm rounded-lg hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors flex items-center justify-center gap-2">
             <Plus size={16} /> Add Milestone
           </button>
         </div>
@@ -354,19 +874,19 @@ const OverviewTab = ({ project, team }) => {
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-sm">
           <h3 className="text-base font-bold text-[#0F172A] mb-4">Quick Actions</h3>
           <div className="space-y-2">
-            <button className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
+            <button onClick={onAddTaskClick} className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
               <Plus size={18} className="text-[#64748B]" /> Add Task
             </button>
-            <button className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
+            <button onClick={onAddTeamMemberClick} className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
               <UserPlus size={18} className="text-[#64748B]" /> Add Team Member
             </button>
-            <button className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
+            <button onClick={onAssignInternClick} className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
               <GraduationCap size={18} className="text-[#64748B]" /> Assign Intern
             </button>
-            <button className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
+            <button onClick={onAddMilestoneClick} className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
               <Flag size={18} className="text-[#64748B]" /> Add Milestone
             </button>
-            <button className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
+            <button onClick={onExportReportClick} className="w-full py-2.5 px-4 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#0F172A] flex items-center gap-3 transition-colors">
               <FileText size={18} className="text-[#64748B]" /> Generate Report
             </button>
           </div>
@@ -400,12 +920,12 @@ const OverviewTab = ({ project, team }) => {
   );
 };
 
-const TasksTab = ({ tasks, onTaskClick }) => (
+const TasksTab = ({ tasks, onTaskClick, onAddTaskClick }) => (
   <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden text-left">
     <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center bg-[#F8FAFC]">
       <input type="text" placeholder="Search tasks..." className="px-3 py-1.5 text-sm border border-[#E2E8F0] rounded-lg focus:ring-1 focus:ring-[#2563EB] outline-none" />
       <div className="flex gap-2">
-        <button className="px-4 py-1.5 bg-[#2563EB] text-white text-sm font-semibold rounded-lg hover:bg-[#1D4ED8] flex items-center gap-2">
+        <button onClick={onAddTaskClick} className="px-4 py-1.5 bg-[#2563EB] text-white text-sm font-semibold rounded-lg hover:bg-[#1D4ED8] flex items-center gap-2">
           <Plus size={16} /> Add Task
         </button>
       </div>
@@ -448,11 +968,11 @@ const TasksTab = ({ tasks, onTaskClick }) => (
   </div>
 );
 
-const TeamTab = ({ team, navigate }) => (
+const TeamTab = ({ team, navigate, onAddTeamMemberClick, onAssignTaskClick }) => (
   <div className="space-y-6 text-left">
     <div className="flex justify-between items-center">
       <h2 className="text-lg font-bold text-[#0F172A]">Project Team ({team.length})</h2>
-      <button className="bg-[#2563EB] text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+      <button onClick={onAddTeamMemberClick} className="bg-[#2563EB] text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
         <UserPlus size={16} /> Add Team Member
       </button>
     </div>
@@ -476,8 +996,8 @@ const TeamTab = ({ team, navigate }) => (
             </div>
             <WorkloadBar percentage={member.workload} size="sm" />
             <div className="mt-5 flex gap-2">
-              <button onClick={(e) => { e.stopPropagation(); if(member.user?._id) navigate(`/hr/employees/${member.user._id}`); }} className="flex-1 py-1.5 border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC]">View Profile</button>
-              <button className="flex-1 py-1.5 border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC]">Assign Task</button>
+              <button onClick={(e) => { e.stopPropagation(); if(member.user?._id) navigate(`/hr/employees/${member.user._id}`); }} className="flex-1 py-1.5 border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC] transition-colors">View Profile</button>
+              <button onClick={() => onAssignTaskClick(member.user?._id)} className="flex-1 py-1.5 border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC] transition-colors">Assign Task</button>
             </div>
           </div>
         );
@@ -489,11 +1009,11 @@ const TeamTab = ({ team, navigate }) => (
   </div>
 );
 
-const InternsTab = ({ interns, navigate }) => (
+const InternsTab = ({ interns, navigate, onAssignInternClick }) => (
   <div className="space-y-6 text-left">
     <div className="flex justify-between items-center">
       <h2 className="text-lg font-bold text-[#0F172A]">Assigned Interns ({interns.length})</h2>
-      <button className="bg-[#2563EB] text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+      <button onClick={onAssignInternClick} className="bg-[#2563EB] text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
         <Plus size={16} /> Assign Intern
       </button>
     </div>

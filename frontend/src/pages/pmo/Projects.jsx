@@ -87,6 +87,45 @@ export default function PMOProjects() {
     emp.role?.slug !== 'hr-manager'
   );
 
+  // Filter available employees based on requested roles
+  const filteredAssemblyPool = projectAssemblyPool.filter(emp => {
+    if (!newProject.requestedRoles || newProject.requestedRoles.length === 0) return true;
+    
+    const empDesignation = (emp.designation || '').toLowerCase();
+    const empRoleName = (emp.role?.name || '').toLowerCase();
+    const empRoleSlug = (emp.role?.slug || '').toLowerCase();
+    
+    return newProject.requestedRoles.some(req => {
+      const reqRole = req.role.toLowerCase();
+      
+      // 1. Direct substring match
+      if (empDesignation.includes(reqRole) || empRoleName.includes(reqRole) || empRoleSlug.includes(reqRole)) {
+        return true;
+      }
+      
+      // 2. Specialization match (e.g., frontend, backend, designer, design, intern)
+      const specializations = ['frontend', 'backend', 'designer', 'design', 'intern'];
+      for (const spec of specializations) {
+        if (reqRole.includes(spec) && (empDesignation.includes(spec) || empRoleName.includes(spec) || empRoleSlug.includes(spec))) {
+          return true;
+        }
+      }
+      
+      // 3. Generic developer/engineer match (e.g. matching general 'Software Engineer' for dev requests)
+      const isReqDev = reqRole.includes('developer') || reqRole.includes('engineer') || reqRole.includes('stack');
+      const isEmpDev = empDesignation.includes('developer') || empDesignation.includes('engineer') || empDesignation.includes('programmer') || empRoleSlug.includes('developer');
+      
+      if (isReqDev && isEmpDev) {
+        // Prevent cross-specialization matching (e.g. don't match Frontend Dev request with Backend Dev employee)
+        if (reqRole.includes('frontend') && empDesignation.includes('backend')) return false;
+        if (reqRole.includes('backend') && empDesignation.includes('frontend')) return false;
+        return true;
+      }
+      
+      return false;
+    });
+  });
+
   const filteredProjects = projects.filter(p => {
     const matchesFilter = filter === 'All' || p.status === filter;
     const matchesSearch = 
@@ -466,7 +505,7 @@ export default function PMOProjects() {
                           <h4 className="text-[13px] font-bold text-[#0F172A]">Company Directory</h4>
                         </div>
                         <div className="p-3 overflow-y-auto space-y-2 custom-scrollbar max-h-[300px]">
-                          {projectAssemblyPool.map(emp => {
+                          {filteredAssemblyPool.map(emp => {
                             const isSelected = newProject.selectedTeam.some(m => m._id === emp._id);
                             const initial = emp.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
                             return (

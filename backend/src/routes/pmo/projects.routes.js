@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
   getProjects, getProjectById, createProject,
   updateProject, addTeamMembers, removeTeamMember,
-  addMilestone, updateMilestone, assignInterns,
+  addMilestone, updateMilestone, assignInterns, deleteProject,
 } from '../../controllers/pmo/projects.controller.js';
 import { protect } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
@@ -17,6 +17,7 @@ router.get('/', requirePermission('Projects', 'read'), getProjects);
 router.post('/', requirePermission('Projects', 'create'), auditLog('Create', 'Projects'), createProject);
 router.get('/:id', requirePermission('Projects', 'read'), getProjectById);
 router.put('/:id', requirePermission('Projects', 'update'), auditLog('Update', 'Projects'), updateProject);
+router.delete('/:id', requirePermission('Projects', 'delete'), auditLog('Delete', 'Projects'), deleteProject);
 
 router.post('/:id/team', requirePermission('Projects', 'manage'), auditLog('Update', 'Projects'), addTeamMembers);
 router.delete('/:id/team/:userId', requirePermission('Projects', 'manage'), auditLog('Update', 'Projects'), removeTeamMember);

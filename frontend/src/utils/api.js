@@ -146,6 +146,7 @@ export const pmoAPI = {
   getProject: (id) => api.get(`/pmo/projects/${id}`),
   createProject: (data) => api.post('/pmo/projects', data),
   updateProject: (id, data) => api.put(`/pmo/projects/${id}`, data),
+  deleteProject: (id) => api.delete(`/pmo/projects/${id}`),
   addProjectTeam: (id, members) => api.post(`/pmo/projects/${id}/team`, { members }),
   removeProjectTeamMember: (id, userId) => api.delete(`/pmo/projects/${id}/team/${userId}`),
   assignProjectInterns: (id, internIds) => api.post(`/pmo/projects/${id}/interns`, { internIds }),
@@ -171,6 +172,8 @@ export const pmoAPI = {
 
   getProjectHealth: () => api.get('/pmo/reports/health'),
   getResourceWarnings: () => api.get('/pmo/reports/warnings'),
+  getDashboardStats: () => api.get('/pmo/dashboard'),
+  reviewApproval: (id, data) => api.put(`/pmo/approvals/${id}`, data),
 };
 
 // ─── EMPLOYEE API ─────────────────────────────────────────────────────────
