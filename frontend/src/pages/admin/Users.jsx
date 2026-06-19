@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Upload } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import BulkImportModal from '../../components/shared/BulkImportModal';
 import { adminAPI } from '../../utils/api';
 
 export default function AdminUsers() {
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState([]);
+  const [showImport, setShowImport]   = useState(false);
 
   // ── Real data state ─────────────────────────────────────────────────────
   const [users, setUsers]           = useState([]);
@@ -18,6 +20,21 @@ export default function AdminUsers() {
   const [searchQuery, setSearchQuery]         = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All');
   const [statusFilter, setStatusFilter]         = useState('All');
+
+  // ── Accurate global stats (not filtered by current page) ─────────────────
+  const [globalStats, setGlobalStats] = useState({ active: null, inactive: null });
+
+  useEffect(() => {
+    Promise.all([
+      adminAPI.getUsers({ status: 'Active', limit: 1 }),
+      adminAPI.getUsers({ status: 'Inactive', limit: 1 }),
+    ]).then(([aRes, iRes]) => {
+      setGlobalStats({
+        active:   aRes.data.pagination?.total ?? aRes.data.total ?? 0,
+        inactive: iRes.data.pagination?.total ?? iRes.data.total ?? 0,
+      });
+    }).catch(() => {});
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -110,59 +127,85 @@ export default function AdminUsers() {
             <h1 className="text-[24px] font-semibold tracking-tight text-[#0F172A]">Users</h1>
             <p className="text-[14px] text-[#64748B] mt-1">Manage user accounts, roles, and system access.</p>
           </div>
-          <button
-            onClick={() => navigate('/admin/users/new')}
-            className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Create User
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => setShowImport(true)}
+              className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
+            >
+              <Upload size={15} />
+              Import CSV
+            </button>
+            <button
+              onClick={() => navigate('/admin/users/new')}
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Create User
+            </button>
+          </div>
         </div>
 
         {/* User Metrics Snapshot */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-md p-4 shadow-sm flex flex-col justify-between h-[96px]">
-            <div className="flex justify-between items-start">
-               <span className="text-[12px] font-semibold text-[#64748B] uppercase tracking-wider">Total Users</span>
-               <span className="material-symbols-outlined text-[18px] text-[#2563EB] bg-[#2563EB]/10 p-1 rounded">group</span>
+          {[
+            {
+              label: 'Total Users',
+              value: loading ? null : total,
+              sub: null,
+              icon: 'group',
+              iconColor: 'text-[#2563EB]',
+              iconBg: 'bg-[#2563EB]/10',
+              topBar: 'bg-[#2563EB]',
+            },
+            {
+              label: 'Active Users',
+              value: globalStats.active,
+              sub: (globalStats.active != null && total > 0)
+                ? `${Math.round((globalStats.active / (globalStats.active + (globalStats.inactive || 0))) * 100)}% of total`
+                : null,
+              icon: 'how_to_reg',
+              iconColor: 'text-[#16A34A]',
+              iconBg: 'bg-[#16A34A]/10',
+              topBar: 'bg-[#16A34A]',
+            },
+            {
+              label: 'Inactive Users',
+              value: globalStats.inactive,
+              sub: null,
+              icon: 'pending_actions',
+              iconColor: 'text-[#D97706]',
+              iconBg: 'bg-[#D97706]/10',
+              topBar: 'bg-[#D97706]',
+            },
+            {
+              label: 'On This Page',
+              value: loading ? null : users.length,
+              sub: `Page ${currentPage} of ${totalPages}`,
+              icon: 'layers',
+              iconColor: 'text-[#475569]',
+              iconBg: 'bg-[#F1F5F9]',
+              topBar: 'bg-[#475569]',
+            },
+          ].map(({ label, value, sub, icon, iconColor, iconBg, topBar }) => (
+            <div key={label} className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+              <div className={`h-1 ${topBar}`} />
+              <div className="p-4">
+                <div className="flex justify-between items-start">
+                  <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">{label}</span>
+                  <span className={`material-symbols-outlined text-[18px] p-1 rounded ${iconColor} ${iconBg}`}>{icon}</span>
+                </div>
+                <div className="mt-2">
+                  {value === null || value === undefined
+                    ? <div className="h-7 w-12 bg-[#F1F5F9] rounded animate-pulse" />
+                    : <span className="text-[26px] font-bold text-[#0F172A] leading-none">{value}</span>
+                  }
+                  {sub && value !== null && (
+                    <p className="text-[11px] text-[#64748B] mt-1">{sub}</p>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="flex items-end gap-2 mt-2">
-              <span className="text-[24px] font-medium text-[#0F172A] leading-none">
-                {loading ? '—' : total}
-              </span>
-            </div>
-          </div>
-          <div className="bg-white border border-[#E2E8F0] rounded-md p-4 shadow-sm flex flex-col justify-between h-[96px]">
-            <div className="flex justify-between items-start">
-               <span className="text-[12px] font-semibold text-[#64748B] uppercase tracking-wider">Active Users</span>
-               <span className="material-symbols-outlined text-[18px] text-[#16A34A] bg-[#16A34A]/10 p-1 rounded">how_to_reg</span>
-            </div>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-[24px] font-medium text-[#0F172A] leading-none">
-                {loading ? '—' : users.filter(u => getStatus(u) === 'Active').length}
-              </span>
-            </div>
-          </div>
-          <div className="bg-white border border-[#E2E8F0] rounded-md p-4 shadow-sm flex flex-col justify-between h-[96px]">
-            <div className="flex justify-between items-start">
-               <span className="text-[12px] font-semibold text-[#64748B] uppercase tracking-wider">Total Pages</span>
-               <span className="material-symbols-outlined text-[18px] text-[#0F172A] bg-[#F1F5F9] p-1 rounded">layers</span>
-            </div>
-            <div className="flex items-end gap-2 mt-2">
-              <span className="text-[24px] font-medium text-[#0F172A] leading-none">{loading ? '—' : totalPages}</span>
-            </div>
-          </div>
-          <div className="bg-white border border-[#E2E8F0] rounded-md p-4 shadow-sm flex flex-col justify-between h-[96px]">
-            <div className="flex justify-between items-start">
-               <span className="text-[12px] font-semibold text-[#64748B] uppercase tracking-wider">Inactive Users</span>
-               <span className="material-symbols-outlined text-[18px] text-[#D97706] bg-[#F59E0B]/10 p-1 rounded">pending_actions</span>
-            </div>
-            <div className="flex items-end justify-between mt-2">
-              <span className="text-[24px] font-medium text-[#0F172A] leading-none">
-                {loading ? '—' : users.filter(u => getStatus(u) !== 'Active').length}
-              </span>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Error Banner */}
@@ -337,6 +380,25 @@ export default function AdminUsers() {
         entityName={deleteTarget?.name}
         entityLabel={deleteTarget?.ids ? 'selection' : 'user'}
         onConfirm={deleteTarget?.ids ? executeBulkDelete : executeSingleDelete}
+      />
+
+      <BulkImportModal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onComplete={() => {
+          setShowImport(false);
+          fetchUsers();
+          // Refresh global stats after import
+          Promise.all([
+            adminAPI.getUsers({ status: 'Active', limit: 1 }),
+            adminAPI.getUsers({ status: 'Inactive', limit: 1 }),
+          ]).then(([aRes, iRes]) => {
+            setGlobalStats({
+              active:   aRes.data.pagination?.total ?? aRes.data.total ?? 0,
+              inactive: iRes.data.pagination?.total ?? iRes.data.total ?? 0,
+            });
+          }).catch(() => {});
+        }}
       />
     </PageWrapper>
   );

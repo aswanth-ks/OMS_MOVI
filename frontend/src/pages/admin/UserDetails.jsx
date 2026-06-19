@@ -301,45 +301,75 @@ export default function AdminUserDetails() {
         </div>
 
         {/* Activity Timeline */}
-        <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-8">
-          <div className="flex justify-between items-center mb-8 border-b border-[#E2E8F0] pb-4">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between">
             <div>
-              <h2 className="text-[18px] font-bold text-[#0F172A]">Recent Activity</h2>
-              <p className="text-[13px] text-[#64748B] mt-1">Audit log entries related to this user account.</p>
+              <h2 className="text-[15px] font-semibold text-[#0F172A]">Recent Activity</h2>
+              <p className="text-[13px] text-[#64748B] mt-0.5">Audit log entries for this user account.</p>
             </div>
             <button
               onClick={() => navigate('/admin/audit')}
-              className="border border-[#E2E8F0] text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
+              className="text-[12px] font-medium text-[#2563EB] hover:underline flex items-center gap-1"
             >
-              <span className="material-symbols-outlined text-[18px]">history</span> Full Audit Log
+              Full Audit Log
+              <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             </button>
           </div>
-
-          {activityLogs.length === 0 ? (
-            <p className="text-[13px] text-[#64748B] text-center py-8">No recent activity found.</p>
-          ) : (
-            <div className="relative pl-4 sm:pl-8">
-              <div className="absolute left-[27px] sm:left-[43px] top-4 bottom-4 w-[2px] bg-[#E2E8F0]"></div>
-              <div className="space-y-8">
-                {activityLogs.map((log, idx) => (
-                  <div key={log._id || idx} className="relative flex items-start gap-6 group">
-                    <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center border-4 border-white shadow-sm relative z-10 shrink-0 group-hover:scale-110 transition-transform">
-                      <span className="material-symbols-outlined text-[18px]">history</span>
+          <div className="px-6 py-4">
+            {activityLogs.length === 0 ? (
+              <p className="text-[13px] text-[#94A3B8] text-center py-8">No recent activity found for this account.</p>
+            ) : (
+              activityLogs.map((log, idx) => {
+                const isLast = idx === activityLogs.length - 1;
+                const resultDot =
+                  log.result === 'SUCCESS' ? 'bg-[#16A34A]' :
+                  log.result === 'FAILED'  ? 'bg-[#DC2626]' :
+                  log.result === 'WARNING' ? 'bg-[#D97706]' : 'bg-[#94A3B8]';
+                const actionCls = (() => {
+                  const a = (log.action || '').toLowerCase();
+                  if (a.includes('create') || a.includes('login')) return 'bg-blue-100 text-blue-700';
+                  if (a.includes('update') || a.includes('edit')) return 'bg-amber-100 text-amber-700';
+                  if (a.includes('delete')) return 'bg-red-100 text-red-700';
+                  if (a.includes('export')) return 'bg-cyan-100 text-cyan-700';
+                  if (a.includes('logout')) return 'bg-gray-100 text-gray-500';
+                  return 'bg-slate-100 text-slate-600';
+                })();
+                const ts = log.createdAt || log.timestamp;
+                return (
+                  <div key={log._id || idx} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${resultDot}`} />
+                      {!isLast && <div className="w-px flex-1 bg-[#E2E8F0] my-1" />}
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full pt-2 gap-2">
-                      <div>
-                        <p className="text-[15px] font-medium text-[#0F172A]">{log.action} in {log.module}</p>
-                        {log.details && <p className="text-[13px] text-[#64748B] mt-0.5">{log.details}</p>}
+                    <div className={`flex-1 min-w-0 ${isLast ? '' : 'pb-4'}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${actionCls}`}>
+                              {log.action || 'Action'}
+                            </span>
+                            {log.module && (
+                              <span className="text-[11px] text-[#475569] bg-[#F1F5F9] px-1.5 py-0.5 rounded">
+                                {log.module}
+                              </span>
+                            )}
+                          </div>
+                          {log.details && (
+                            <p className="text-[13px] text-[#64748B] mt-0.5 leading-snug">
+                              {log.details.length > 80 ? `${log.details.slice(0, 80)}…` : log.details}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-[#94A3B8] shrink-0 whitespace-nowrap">
+                          {ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}
+                        </span>
                       </div>
-                      <span className="text-[13px] font-medium text-[#94A3B8] whitespace-nowrap">
-                        {log.timestamp ? new Date(log.timestamp).toLocaleString() : ''}
-                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
 
       </div>
