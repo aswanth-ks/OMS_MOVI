@@ -3,50 +3,66 @@ import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
 import { adminAPI } from '../../utils/api';
 
+const EMP_TYPES = [
+  { value: 'Full-time', label: 'Full-time',  icon: 'work',       desc: 'Permanent employee' },
+  { value: 'Part-time', label: 'Part-time',  icon: 'schedule',   desc: 'Reduced hours'      },
+  { value: 'Contract',  label: 'Contract',   icon: 'handshake',  desc: 'Fixed-term contract' },
+  { value: 'Intern',    label: 'Intern',     icon: 'school',     desc: 'Internship program'  },
+];
+
 export default function AdminCreateUser() {
   const navigate = useNavigate();
 
-  // ── Form state ─────────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    employeeId: '',
-    phone: '',
-    department: '',
-    designation: '',
-    manager: '',
-    employmentType: 'Full-time',
-    role: '',
-    generatePassword: true,
-    sendInvite: true,
+    name:                  '',
+    email:                 '',
+    employeeId:            '',
+    phone:                 '',
+    department:            '',
+    designation:           '',
+    manager:               '',
+    hrManager:             '',
+    employmentType:        'Full-time',
+    role:                  '',
+    joinDate:              '',
+    college:               '',
+    internshipStart:       '',
+    internshipEnd:         '',
+    generatePassword:      true,
+    sendInvite:            true,
     requirePasswordChange: true,
   });
 
-  // ── Async state ────────────────────────────────────────────────────────────
-  const [roles, setRoles]               = useState([]);
-  const [departments, setDepartments]   = useState([]);
+  const [roles, setRoles]             = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [managers, setManagers]       = useState([]);
   const [rolesLoading, setRolesLoading] = useState(true);
   const [deptLoading, setDeptLoading]   = useState(true);
-  const [submitting, setSubmitting]     = useState(false);
-  const [submitError, setSubmitError]   = useState('');
+  const [submitting, setSubmitting]   = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  // ── Load roles & departments on mount ──────────────────────────────────────
   useEffect(() => {
     adminAPI.getRoles()
-      .then(res => setRoles(res.data.data || []))
+      .then(r => setRoles(r.data.data || []))
       .catch(() => setRoles([]))
       .finally(() => setRolesLoading(false));
 
     adminAPI.getDepartments()
-      .then(res => setDepartments(res.data.data || []))
+      .then(r => setDepartments(r.data.data || []))
       .catch(() => setDepartments([]))
       .finally(() => setDeptLoading(false));
+
+    adminAPI.getUsers({ status: 'Active', limit: 100 })
+      .then(r => setManagers(r.data.data || []))
+      .catch(() => setManagers([]));
   }, []);
 
-  const handleChange = (field) => (e) => {
+  const set = (field) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  const isIntern = formData.employmentType === 'Intern';
 
   const validateForm = () => {
     if (!formData.name.trim())  { setSubmitError('Full name is required.'); return false; }
@@ -60,205 +76,321 @@ export default function AdminCreateUser() {
     e.preventDefault();
     setSubmitError('');
     if (!validateForm()) return;
-
     setSubmitting(true);
     try {
       const payload = {
         name:           formData.name.trim(),
         email:          formData.email.trim(),
         phone:          formData.phone || undefined,
-        role:           formData.role,           // MongoDB ObjectId
-        department:     formData.department,     // MongoDB ObjectId
+        role:           formData.role,
+        department:     formData.department,
         designation:    formData.designation || undefined,
         employmentType: formData.employmentType,
+        manager:        formData.manager || undefined,
+        hrManager:      formData.hrManager || undefined,
+        ...(isIntern ? {
+          college:         formData.college || undefined,
+          internshipStart: formData.internshipStart || undefined,
+          internshipEnd:   formData.internshipEnd || undefined,
+        } : {
+          joinDate: formData.joinDate || undefined,
+        }),
       };
       const res = await adminAPI.createUser(payload);
-      if (res.data?.data?.warning) {
-        alert(`User created. Note: ${res.data.data.warning}`);
-      }
+      if (res.data?.data?.warning) toast?.error?.(res.data.data.warning);
       navigate('/admin/users');
     } catch (err) {
-      setSubmitError(
-        err.response?.data?.message || 'Failed to create user. Please try again.'
-      );
+      setSubmitError(err.response?.data?.message || 'Failed to create user. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ── Input class helper ────────────────────────────────────────────────────
-  const inputCls = 'w-full border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-[14px] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-colors';
-  const selectCls = `${inputCls} bg-white appearance-none cursor-pointer`;
+  const inputCls = 'w-full border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-[13px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-colors bg-white';
+  const selectCls = `${inputCls} appearance-none cursor-pointer`;
+
+  const Field = ({ label, required, hint, children }) => (
+    <div>
+      <label className="block text-[12px] font-semibold text-[#475569] uppercase tracking-wide mb-1.5">
+        {label}{required && <span className="text-[#DC2626] ml-0.5">*</span>}
+      </label>
+      {children}
+      {hint && <p className="text-[11px] text-[#94A3B8] mt-1">{hint}</p>}
+    </div>
+  );
+
+  const SelectWrapper = ({ children }) => (
+    <div className="relative">
+      {children}
+      <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none text-[18px]">expand_more</span>
+    </div>
+  );
+
+  const SectionHeader = ({ number, icon, title, desc }) => (
+    <div className="lg:col-span-1">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-6 h-6 rounded-full bg-[#2563EB] text-white text-[11px] font-bold flex items-center justify-center shrink-0">{number}</span>
+        <span className="material-symbols-outlined text-[#2563EB] text-[20px]">{icon}</span>
+        <h2 className="text-[15px] font-bold text-[#0F172A]">{title}</h2>
+      </div>
+      <p className="text-[13px] text-[#64748B] leading-relaxed pl-8">{desc}</p>
+    </div>
+  );
+
+  const selectedRole = roles.find(r => r._id === formData.role);
 
   return (
     <PageWrapper>
-      <form onSubmit={handleSubmit} className="font-sans text-[#0F172A] max-w-[1000px] mx-auto flex flex-col h-full gap-8 pb-24">
+      <form onSubmit={handleSubmit} className="font-sans text-[#0F172A] max-w-[1040px] mx-auto flex flex-col gap-8 pb-24">
 
-        {/* Page Header */}
-        <div className="flex flex-col gap-2 border-b border-[#E2E8F0] pb-6">
-          <div className="flex items-center gap-2 text-[13px] text-[#64748B] font-medium pt-2">
+        {/* Header */}
+        <div className="border-b border-[#E2E8F0] pb-5">
+          <div className="flex items-center gap-1.5 text-[12px] text-[#64748B] mb-3">
             <button type="button" onClick={() => navigate('/admin/users')} className="hover:text-[#2563EB] transition-colors flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">group</span> Users
+              <span className="material-symbols-outlined text-[15px]">group</span> Users
             </button>
-            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-            <span className="text-[#0F172A]">Onboard New User</span>
+            <span className="material-symbols-outlined text-[15px]">chevron_right</span>
+            <span className="text-[#0F172A] font-medium">Onboard New User</span>
           </div>
-          <div>
-            <h1 className="text-[28px] font-bold tracking-tight text-[#0F172A]">Onboard New User</h1>
-            <p className="text-[15px] text-[#64748B] mt-1">Configure identity, corporate structure, and system access for a new employee.</p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-[26px] font-bold tracking-tight text-[#0F172A]">Onboard New User</h1>
+              <p className="text-[14px] text-[#64748B] mt-1">Set up identity, organization structure, and system access for a new team member.</p>
+            </div>
+            {/* Step indicators */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0 mt-1">
+              {['Identity', 'Structure', 'Access'].map((s, i) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-full bg-[#EFF6FF] border border-[#2563EB] text-[#2563EB] text-[10px] font-bold flex items-center justify-center">{i + 1}</div>
+                    <span className="text-[11px] font-semibold text-[#64748B]">{s}</span>
+                  </div>
+                  {i < 2 && <span className="text-[#CBD5E1] text-[14px]">›</span>}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Submit Error Banner */}
+        {/* Error Banner */}
         {submitError && (
-          <div className="bg-[#FEF2F2] border border-[#DC2626] rounded-lg p-3 text-sm text-[#DC2626] font-medium flex items-center gap-2">
-            <span className="material-symbols-outlined text-[16px]">error</span>
+          <div className="bg-[#FEF2F2] border border-[#DC2626]/30 rounded-xl p-4 text-[13px] text-[#DC2626] font-medium flex items-start gap-2.5">
+            <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
             {submitError}
           </div>
         )}
 
-        {/* Split Layout Form Sections */}
-        <div className="space-y-10 divide-y divide-[#E2E8F0]">
+        <div className="space-y-0 divide-y divide-[#E2E8F0]">
 
-          {/* Section 1: Identity & Contact */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-2">
-            <div className="lg:col-span-1">
-              <h2 className="text-[16px] font-bold text-[#0F172A] flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563EB]">badge</span>
-                Identity &amp; Contact
-              </h2>
-              <p className="text-[13px] text-[#64748B] mt-2 leading-relaxed">
-                Provide the user's legal name, corporate contact details, and their unique identifier. This information forms the basis of their system profile.
-              </p>
-            </div>
-            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="sm:col-span-2">
-                <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Full Name <span className="text-[#DC2626]">*</span></label>
-                <input type="text" className={inputCls} placeholder="e.g. Jane Doe" value={formData.name} onChange={handleChange('name')} required />
-              </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Email Address <span className="text-[#DC2626]">*</span></label>
-                <input type="email" className={inputCls} placeholder="jane.doe@movicloud.com" value={formData.email} onChange={handleChange('email')} required />
-              </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Employee ID</label>
-                <input type="text" className={inputCls} placeholder="Auto-generated if blank" value={formData.employeeId} onChange={handleChange('employeeId')} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Phone Number</label>
-                <input type="tel" className={inputCls} placeholder="+1 (555) 000-0000" value={formData.phone} onChange={handleChange('phone')} />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Corporate Structure */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-10">
-            <div className="lg:col-span-1">
-              <h2 className="text-[16px] font-bold text-[#0F172A] flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563EB]">account_tree</span>
-                Corporate Structure
-              </h2>
-              <p className="text-[13px] text-[#64748B] mt-2 leading-relaxed">
-                Define where the user sits within the organization. This determines their reporting lines and departmental access.
-              </p>
-            </div>
-            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Department <span className="text-[#DC2626]">*</span></label>
-                <div className="relative">
-                  <select className={selectCls} value={formData.department} onChange={handleChange('department')} required>
-                    <option value="">{deptLoading ? 'Loading...' : 'Select Department'}</option>
-                    {departments.map(dept => (
-                      <option key={dept._id} value={dept._id}>{dept.name}</option>
-                    ))}
-                  </select>
-                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] pointer-events-none text-[18px]">expand_more</span>
+          {/* ── SECTION 1: Identity & Contact ─────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 py-8">
+            <SectionHeader
+              number="1" icon="badge" title="Identity & Contact"
+              desc="The user's legal name and corporate email. Phone and address can be filled by the employee through their profile settings."
+            />
+            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+              <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="sm:col-span-2">
+                  <Field label="Full Name" required>
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-[18px]">person</span>
+                      <input type="text" className={`${inputCls} pl-10`} placeholder="e.g. Jane Doe" value={formData.name} onChange={set('name')} />
+                    </div>
+                  </Field>
                 </div>
-              </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Job Title <span className="text-[#DC2626]">*</span></label>
-                <input type="text" className={inputCls} placeholder="e.g. Senior Developer" value={formData.designation} onChange={handleChange('designation')} />
-              </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Employment Type</label>
-                <div className="relative">
-                  <select className={selectCls} value={formData.employmentType} onChange={handleChange('employmentType')}>
-                    <option value="Full-time">Full Time</option>
-                    <option value="Part-time">Part Time</option>
-                    <option value="Contract">Contractor</option>
-                    <option value="Intern">Intern</option>
-                  </select>
-                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] pointer-events-none text-[18px]">expand_more</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Access & Security */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-10">
-            <div className="lg:col-span-1">
-              <h2 className="text-[16px] font-bold text-[#0F172A] flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#2563EB]">security</span>
-                Access &amp; Security
-              </h2>
-              <p className="text-[13px] text-[#64748B] mt-2 leading-relaxed">
-                Determine the user's privileges within OWMS. Careful assignment here prevents unauthorized access to sensitive operational data.
-              </p>
-            </div>
-            <div className="lg:col-span-2 bg-white border border-[#E2E8F0] rounded-xl shadow-sm p-6 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">System Role <span className="text-[#DC2626]">*</span></label>
+                <Field label="Work Email" required>
                   <div className="relative">
-                    <select className={selectCls} value={formData.role} onChange={handleChange('role')} required>
-                      <option value="">{rolesLoading ? 'Loading...' : 'Select Role'}</option>
-                      {roles.map(role => (
-                        <option key={role._id} value={role._id}>{role.name}</option>
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-[18px]">mail</span>
+                    <input type="email" className={`${inputCls} pl-10`} placeholder="jane@movicloud.com" value={formData.email} onChange={set('email')} />
+                  </div>
+                </Field>
+                <Field label="Employee ID" hint="Leave blank to auto-generate (e.g. EMP-2025-001)">
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-[18px]">tag</span>
+                    <input type="text" className={`${inputCls} pl-10 font-mono`} placeholder="Auto-generated" value={formData.employeeId} onChange={set('employeeId')} />
+                  </div>
+                </Field>
+                <Field label="Phone Number" hint="Optional — employee can update via settings">
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-[18px]">call</span>
+                    <input type="tel" className={`${inputCls} pl-10`} placeholder="+91 98765 43210" value={formData.phone} onChange={set('phone')} />
+                  </div>
+                </Field>
+              </div>
+            </div>
+          </div>
+
+          {/* ── SECTION 2: Corporate Structure ────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 py-8">
+            <SectionHeader
+              number="2" icon="account_tree" title="Corporate Structure"
+              desc="Where this person fits in the organization — their team, title, employment type, and who they report to."
+            />
+            <div className="lg:col-span-2 space-y-5">
+
+              {/* Employment Type — button group */}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm px-6 py-5">
+                <p className="text-[12px] font-semibold text-[#475569] uppercase tracking-wide mb-3">Employment Type <span className="text-[#DC2626]">*</span></p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {EMP_TYPES.map(({ value, label, icon, desc }) => {
+                    const active = formData.employmentType === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFormData(p => ({ ...p, employmentType: value }))}
+                        className={`flex flex-col items-center gap-1.5 px-3 py-3.5 rounded-xl border-2 text-center transition-all ${
+                          active
+                            ? 'border-[#2563EB] bg-[#EFF6FF] shadow-sm'
+                            : 'border-[#E2E8F0] hover:border-[#CBD5E1] hover:bg-[#F8FAFC]'
+                        }`}
+                      >
+                        <span className={`material-symbols-outlined text-[22px] ${active ? 'text-[#2563EB]' : 'text-[#94A3B8]'}`}>{icon}</span>
+                        <span className={`text-[12px] font-semibold ${active ? 'text-[#2563EB]' : 'text-[#475569]'}`}>{label}</span>
+                        <span className="text-[10px] text-[#94A3B8] leading-snug">{desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Dept + Designation + Date */}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <Field label="Department" required>
+                  <SelectWrapper>
+                    <select className={selectCls} value={formData.department} onChange={set('department')} required>
+                      <option value="">{deptLoading ? 'Loading...' : 'Select Department'}</option>
+                      {departments.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                    </select>
+                  </SelectWrapper>
+                </Field>
+                <Field label="Job Title / Designation">
+                  <input type="text" className={inputCls} placeholder={isIntern ? 'e.g. Engineering Intern' : 'e.g. Senior Developer'} value={formData.designation} onChange={set('designation')} />
+                </Field>
+                {isIntern ? (
+                  <>
+                    <Field label="College / Institution" hint="University or college name">
+                      <input type="text" className={inputCls} placeholder="e.g. IIT Madras" value={formData.college} onChange={set('college')} />
+                    </Field>
+                    <div /> {/* spacer */}
+                    <Field label="Internship Start Date">
+                      <input type="date" className={inputCls} value={formData.internshipStart} onChange={set('internshipStart')} />
+                    </Field>
+                    <Field label="Internship End Date">
+                      <input type="date" className={inputCls} value={formData.internshipEnd} onChange={set('internshipEnd')} />
+                    </Field>
+                  </>
+                ) : (
+                  <Field label="Join Date" hint="Date the employee officially joined the organization">
+                    <input type="date" className={inputCls} value={formData.joinDate} onChange={set('joinDate')} />
+                  </Field>
+                )}
+              </div>
+
+              {/* Reporting */}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <Field label="Reporting Manager" hint="Who this person directly reports to">
+                  <SelectWrapper>
+                    <select className={selectCls} value={formData.manager} onChange={set('manager')}>
+                      <option value="">Select Manager (optional)</option>
+                      {managers.filter(m => m._id !== formData.email).map(m => (
+                        <option key={m._id} value={m._id}>{m.name} — {m.department?.name || m.role?.name || ''}</option>
                       ))}
                     </select>
-                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] pointer-events-none text-[18px]">expand_more</span>
-                  </div>
-                </div>
+                  </SelectWrapper>
+                </Field>
+                <Field label="HR Manager" hint="The HR contact responsible for this user">
+                  <SelectWrapper>
+                    <select className={selectCls} value={formData.hrManager} onChange={set('hrManager')}>
+                      <option value="">Select HR Manager (optional)</option>
+                      {managers.map(m => (
+                        <option key={m._id} value={m._id}>{m.name} — {m.role?.name || ''}</option>
+                      ))}
+                    </select>
+                  </SelectWrapper>
+                </Field>
               </div>
 
-              <div className="pt-4 border-t border-[#E2E8F0]">
-                <h3 className="text-[13px] font-semibold text-[#0F172A] mb-3">Onboarding Actions</h3>
-                <div className="space-y-3">
+            </div>
+          </div>
+
+          {/* ── SECTION 3: Access & Security ─────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 py-8">
+            <SectionHeader
+              number="3" icon="security" title="Access & Security"
+              desc="Assign a system role that determines what this user can view and action within OWMS. Choose carefully — roles control all module access."
+            />
+            <div className="lg:col-span-2 space-y-5">
+
+              {/* Role selector */}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm px-6 py-5">
+                <Field label="System Role" required>
+                  <SelectWrapper>
+                    <select className={selectCls} value={formData.role} onChange={set('role')} required>
+                      <option value="">{rolesLoading ? 'Loading roles...' : 'Select a system role'}</option>
+                      {roles.map(r => <option key={r._id} value={r._id}>{r.name}</option>)}
+                    </select>
+                  </SelectWrapper>
+                </Field>
+                {selectedRole && (
+                  <div className="mt-3 flex items-start gap-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-3.5 py-3">
+                    <span className="material-symbols-outlined text-[#2563EB] text-[18px] shrink-0 mt-0.5">shield</span>
+                    <div>
+                      <p className="text-[12px] font-semibold text-[#1D4ED8]">{selectedRole.name}</p>
+                      {selectedRole.description && (
+                        <p className="text-[12px] text-[#3B82F6] mt-0.5">{selectedRole.description}</p>
+                      )}
+                      {selectedRole.slug && (
+                        <p className="text-[11px] text-[#64748B] mt-0.5 font-mono">slug: {selectedRole.slug}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Onboarding actions */}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm px-6 py-5">
+                <p className="text-[12px] font-semibold text-[#475569] uppercase tracking-wide mb-4">Onboarding Actions</p>
+                <div className="space-y-4">
                   {[
-                    { field: 'generatePassword', label: 'Generate Temporary Password', desc: 'System will automatically generate a secure 12-character password.' },
-                    { field: 'sendInvite', label: 'Send Invitation Email', desc: 'User will receive instructions on how to log in.' },
-                    { field: 'requirePasswordChange', label: 'Require Password Change', desc: 'User must change their password upon first login.' },
-                  ].map(({ field, label, desc }) => (
-                    <label key={field} className="flex items-start gap-3 cursor-pointer group">
-                      <div className="relative flex items-center justify-center mt-0.5">
+                    { field: 'generatePassword',      label: 'Auto-generate temporary password', desc: 'A secure 12-character password is created and can be shared with the user.',    icon: 'key' },
+                    { field: 'sendInvite',            label: 'Send invitation email',           desc: 'User receives a welcome email with login instructions and credentials.',        icon: 'mail' },
+                    { field: 'requirePasswordChange', label: 'Require password change on login', desc: 'Ensures the user sets a personal password before accessing any module.',       icon: 'lock_reset' },
+                  ].map(({ field, label, desc, icon }) => (
+                    <label key={field} className="flex items-start gap-3.5 cursor-pointer group">
+                      <div className="relative mt-0.5 flex items-center justify-center shrink-0">
                         <input
                           type="checkbox"
                           checked={formData[field]}
-                          onChange={handleChange(field)}
-                          className="peer appearance-none w-4 h-4 rounded border border-[#CBD5E1] checked:bg-[#2563EB] checked:border-[#2563EB] transition-colors cursor-pointer"
+                          onChange={set(field)}
+                          className="peer appearance-none w-4 h-4 rounded border-2 border-[#CBD5E1] checked:bg-[#2563EB] checked:border-[#2563EB] transition-colors cursor-pointer"
                         />
-                        <span className="material-symbols-outlined absolute text-white text-[12px] opacity-0 peer-checked:opacity-100 pointer-events-none">check</span>
+                        <span className="material-symbols-outlined absolute text-white text-[11px] opacity-0 peer-checked:opacity-100 pointer-events-none leading-none">check</span>
                       </div>
-                      <div>
-                        <span className="block text-[13px] font-medium text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{label}</span>
-                        <span className="block text-[12px] text-[#64748B]">{desc}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[15px] text-[#94A3B8]">{icon}</span>
+                          <span className="text-[13px] font-semibold text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{label}</span>
+                        </div>
+                        <p className="text-[12px] text-[#64748B] mt-0.5 leading-snug">{desc}</p>
                       </div>
                     </label>
                   ))}
                 </div>
               </div>
+
             </div>
           </div>
         </div>
 
-        {/* Action Footer */}
-        <div className="flex items-center justify-between pt-8 mt-4 border-t border-[#E2E8F0]">
+        {/* ── Action Footer ──────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between pt-6 border-t border-[#E2E8F0]">
           <button
             type="button"
             onClick={() => navigate('/admin/users')}
-            className="text-[14px] font-medium text-[#64748B] hover:text-[#0F172A] transition-colors"
+            className="text-[13px] font-medium text-[#64748B] hover:text-[#0F172A] transition-colors"
           >
-            Cancel Onboarding
+            ← Cancel
           </button>
           <div className="flex items-center gap-3">
             <button
@@ -271,17 +403,14 @@ export default function AdminCreateUser() {
             <button
               type="submit"
               disabled={submitting}
-              className="bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-[13px] font-medium transition-colors shadow-sm flex items-center gap-2"
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-[13px] font-semibold transition-colors shadow-sm flex items-center gap-2"
             >
               {submitting ? (
-                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <span className="material-symbols-outlined text-[18px]">person_add</span>
               )}
-              {submitting ? 'Creating...' : 'Create User'}
+              {submitting ? 'Creating user…' : 'Create User'}
             </button>
           </div>
         </div>
