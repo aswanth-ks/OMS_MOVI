@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
 import { 
@@ -6,82 +6,131 @@ import {
   CheckCircle, Users, AlertCircle 
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-// --- MOCK DATA ---
-// BACKEND: GET /api/employee/dashboard
-const mockEmployee = {
-  _id: "emp001", 
-  name: "Alex Wong",
-  email: "alex.wong@movicloudlabs.com",
-  employeeId: "EMP-2024-003",
-  designation: "Senior Developer",
-  department: { _id: "dept001", name: "Engineering" },
-  projects: [
-    { _id: "proj001", name: "OWMS Internal Platform v2", status: "Active", role: "Developer" },
-    { _id: "proj002", name: "Data Pipeline Automation", status: "Active", role: "Lead Developer" },
-    { _id: "proj003", name: "CRM Module", status: "Planning", role: "Developer" },
-  ],
-  manager: { _id: "pmo001", name: "Aswanth K", role: "PMO Lead" },
-  hrManager: { _id: "hr001", name: "Sarah Johnson" },
-  joinDate: "2023-03-15T00:00:00Z",
-  employmentType: "Full-time",
-  workload: 85,
-  leaveBalance: { casual: 8, sick: 5, annual: 12, used: 6 }
-};
-
-const MOCK_TASKS = [
-  { id: 1, title: 'Build Login Page UI', project: 'OWMS Internal Platform v2', priority: 'High', priorityColor: 'bg-orange-500', status: 'In Progress', due: 'Today' },
-  { id: 2, title: 'API Integration for Auth', project: 'OWMS Internal Platform v2', priority: 'Critical', priorityColor: 'bg-red-500', status: 'Todo', due: 'Today' },
-];
-
-const MOCK_PROJECT_STATS = [
-  { id: "proj001", name: "OWMS Internal Platform v2", status: "Active", priority: "High", done: 8, total: 12, date: "Nov 30, 2026", teamSize: 6, health: "On Track" },
-  { id: "proj002", name: "Data Pipeline Automation", status: "Active", priority: "Medium", done: 15, total: 45, date: "Dec 15, 2026", teamSize: 4, health: "At Risk" },
-  { id: "proj003", name: "CRM Module", status: "Planning", priority: "Low", done: 0, total: 5, date: "Jan 10, 2027", teamSize: 3, health: "On Track" },
-];
-
-const MOCK_DEADLINES = [
-  { id: 1, title: 'Submit Architecture Doc', date: 'Tomorrow', priority: 'Medium', urgency: 'amber' },
-  { id: 2, title: 'Auth Module Code Review', date: 'Oct 15', priority: 'High', urgency: 'blue' },
-  { id: 3, title: 'Sprint 4 Planning', date: 'Oct 20', priority: 'Critical', urgency: 'gray' },
-];
-
-const MOCK_ACTIVITIES = [
-  { id: 1, text: "Task 'Build Login Page' marked In Progress", time: "2h ago", color: "bg-blue-500" },
-  { id: 2, text: "Assigned to 'CRM Module' project", time: "Yesterday", color: "bg-purple-500" },
-  { id: 3, text: "Task 'Fix Pipeline' completed", time: "2 days ago", color: "bg-green-500" },
-];
-
-const MOCK_TEAM = [
-  { id: 1, name: "Sarah Connor", avatar: "SC", role: "Product Manager", department: "Product", color: "bg-blue-600" },
-  { id: 2, name: "John Doe", avatar: "JD", role: "Developer", department: "Engineering", color: "bg-purple-600" },
-  { id: 3, name: "Rahul Mehta", avatar: "RM", role: "Intern", department: "Engineering", color: "bg-amber-600" },
-];
+import { employeeAPI } from '../../utils/api';
+import toast from 'react-hot-toast';
 
 export default function EmployeeDashboard() {
   const navigate = useNavigate();
 
-  const getUrgencyColor = (urgency) => {
-    switch (urgency) {
-      case 'red': return 'bg-red-500';
-      case 'amber': return 'bg-amber-500';
-      case 'blue': return 'bg-blue-500';
+  const [profile, setProfile] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState(null);
+  const [team, setTeam] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      const profileRes = await employeeAPI.getProfile();
+      setProfile(profileRes.data.data);
+
+      const tasksRes = await employeeAPI.getTasks();
+      setTasks(tasksRes.data.data || []);
+
+      const projectsRes = await employeeAPI.getProjects();
+      setProjects(projectsRes.data.data || []);
+
+      const attendanceRes = await employeeAPI.getAttendance();
+      setAttendance(attendanceRes.data.data || []);
+
+      try {
+        const leaveRes = await employeeAPI.getLeaveBalance();
+        setLeaveBalance(leaveRes.data.data);
+      } catch (leaveErr) {
+        console.warn('Could not load leave balance', leaveErr);
+      }
+
+      try {
+        const teamRes = await employeeAPI.getTeam();
+        setTeam(teamRes.data.data || []);
+      } catch (teamErr) {
+        console.warn('Could not load team members', teamErr);
+      }
+    } catch (err) {
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center items-center h-screen bg-[#F8FAFC]">
+          <span className="material-symbols-outlined text-[32px] text-[#2563EB] animate-spin">sync</span>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  // Calculate task counts
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(t => t.status === 'Done').length;
+  const activeTasksCount = tasks.filter(t => t.status !== 'Done').length;
+
+  // Calculate attendance rate
+  const totalDays = attendance.length;
+  const presentDays = attendance.filter(a => a.status === 'Present').length;
+  const attendancePercent = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 100;
+
+  // Calculate remaining leaves
+  const remainingLeaves = leaveBalance 
+    ? ((leaveBalance.casual?.total || 0) + (leaveBalance.sick?.total || 0) + (leaveBalance.annual?.total || 0)) -
+      ((leaveBalance.casual?.used || 0) + (leaveBalance.sick?.used || 0) + (leaveBalance.annual?.used || 0))
+    : 19;
+
+  // Calculate workload
+  const maxWorkload = 10;
+  const workload = Math.min(Math.round((activeTasksCount / maxWorkload) * 100), 100);
+
+  const getUrgencyColor = (priority) => {
+    switch (priority) {
+      case 'Critical': return 'bg-red-500';
+      case 'High': return 'bg-orange-500';
+      case 'Medium': return 'bg-blue-500';
       default: return 'bg-slate-300';
     }
   };
 
-  const workloadColor = mockEmployee.workload < 50 ? 'text-[#16A34A] bg-[#DCFCE7]' : mockEmployee.workload <= 80 ? 'text-[#D97706] bg-[#FEF3C7]' : 'text-[#DC2626] bg-[#FEE2E2]';
-  const workloadBarColor = mockEmployee.workload < 50 ? 'bg-[#16A34A]' : mockEmployee.workload <= 80 ? 'bg-[#D97706]' : 'bg-[#DC2626]';
+  const workloadColor = workload < 50 ? 'text-[#16A34A] bg-[#DCFCE7]' : workload <= 80 ? 'text-[#D97706] bg-[#FEF3C7]' : 'text-[#DC2626] bg-[#FEE2E2]';
+  const workloadBarColor = workload < 50 ? 'bg-[#16A34A]' : workload <= 80 ? 'bg-[#D97706]' : 'bg-[#DC2626]';
+
+  // Filters tasks for "Today's Tasks" section (active tasks)
+  const todaysTasks = tasks.filter(t => t.status !== 'Done').slice(0, 3);
+
+  // Generate activities dynamically from statusHistory
+  const recentActivities = tasks
+    .filter(t => t.statusHistory && t.statusHistory.length > 0)
+    .flatMap(t => t.statusHistory.map(h => ({
+      id: h._id || Math.random(),
+      text: `Task '${t.title}' marked ${h.status}`,
+      time: new Date(h.changedAt).toLocaleDateString(),
+      color: h.status === 'Done' ? 'bg-green-500' : (h.status === 'In Progress' ? 'bg-blue-500' : 'bg-purple-500')
+    })))
+    .sort((a, b) => new Date(b.time) - new Date(a.time))
+    .slice(0, 3);
+
+  // Fallback default activities if history is empty
+  const activities = recentActivities.length > 0 ? recentActivities : [
+    { id: 1, text: "Assigned to department projects", time: "Recently", color: "bg-purple-500" },
+    { id: 2, text: "Profile logged into OWMS workspace", time: "Today", color: "bg-blue-500" }
+  ];
 
   return (
     <PageWrapper>
-      <div className="w-full flex flex-col gap-6 max-w-[1400px] mx-auto pb-8 font-sans">
+      <div className="w-full flex flex-col gap-6 max-w-[1400px] mx-auto pb-8 font-sans text-left">
         
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mt-6">
           <div>
-            <h1 className="text-2xl font-bold text-[#0F172A]">Good morning, {mockEmployee.name}</h1>
-            <p className="text-sm text-[#64748B] mt-1">{mockEmployee.designation} &middot; {mockEmployee.department.name}</p>
+            <h1 className="text-2xl font-bold text-[#0F172A]">Good morning, {profile?.name || 'User'}</h1>
+            <p className="text-sm text-[#64748B] mt-1">{profile?.designation || 'Staff'} &middot; {profile?.department?.name || 'Operations'}</p>
           </div>
           <div>
             <p className="text-sm text-[#64748B] font-medium">
@@ -98,7 +147,7 @@ export default function EmployeeDashboard() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#0F172A]">My Tasks</p>
-              <p className="text-xs text-[#64748B]">24 &middot; 16 done</p>
+              <p className="text-xs text-[#64748B]">{totalTasks} &middot; {completedTasks} done</p>
             </div>
           </div>
           <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
@@ -107,7 +156,7 @@ export default function EmployeeDashboard() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#0F172A]">Projects</p>
-              <p className="text-xs text-[#64748B]">{mockEmployee.projects.length} active</p>
+              <p className="text-xs text-[#64748B]">{projects.length} active</p>
             </div>
           </div>
           <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
@@ -116,7 +165,7 @@ export default function EmployeeDashboard() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#0F172A]">Attendance</p>
-              <p className="text-xs text-[#64748B]">98% &middot; 22/23 days</p>
+              <p className="text-xs text-[#64748B]">{attendancePercent}% &middot; {presentDays}/{totalDays} days</p>
             </div>
           </div>
           <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
@@ -125,7 +174,7 @@ export default function EmployeeDashboard() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#0F172A]">Leave</p>
-              <p className="text-xs text-[#64748B]">19 days left</p>
+              <p className="text-xs text-[#64748B]">{remainingLeaves} days left</p>
             </div>
           </div>
         </div>
@@ -145,18 +194,20 @@ export default function EmployeeDashboard() {
                 </button>
               </div>
               <div className="space-y-3">
-                {MOCK_TASKS.length > 0 ? MOCK_TASKS.map(task => (
-                  <div key={task.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-[#E2E8F0] rounded-lg hover:border-blue-300 transition-colors cursor-pointer group">
+                {todaysTasks.length > 0 ? todaysTasks.map(task => (
+                  <div key={task._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-[#E2E8F0] rounded-lg hover:border-blue-300 transition-colors cursor-pointer group" onClick={() => navigate('/employee/tasks')}>
                     <div className="flex items-center gap-3 mb-2 sm:mb-0">
-                      <div className={`w-2 h-2 rounded-full ${task.priorityColor}`} />
+                      <div className={`w-2 h-2 rounded-full ${getUrgencyColor(task.priority)}`} />
                       <span className="text-sm font-medium text-[#0F172A]">{task.title}</span>
-                      <span className="text-xs bg-[#F1F5F9] text-[#64748B] px-2 py-0.5 rounded ml-2 hidden sm:inline-block max-w-[150px] truncate" title={task.project}>{task.project}</span>
+                      <span className="text-xs bg-[#F1F5F9] text-[#64748B] px-2 py-0.5 rounded ml-2 hidden sm:inline-block max-w-[150px] truncate" title={task.project?.name}>{task.project?.name || 'Project'}</span>
                     </div>
                     <div className="flex items-center gap-3 sm:gap-4 pl-5 sm:pl-0">
-                      <span className="text-xs font-semibold text-[#64748B] whitespace-nowrap">Due {task.due}</span>
+                      <span className="text-xs font-semibold text-[#64748B] whitespace-nowrap">Due {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}</span>
                       <div className="w-24">
-                        {task.status === 'Todo' && <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded w-full inline-block text-center">Todo</span>}
-                        {task.status === 'In Progress' && <span className="text-[11px] font-bold bg-blue-50 text-[#2563EB] px-2 py-1 rounded w-full inline-block text-center">In Progress</span>}
+                        <span className={`text-[11px] font-bold px-2 py-1 rounded w-full inline-block text-center ${
+                          task.status === 'Todo' ? 'bg-slate-100 text-slate-600' :
+                          task.status === 'In Progress' ? 'bg-blue-50 text-[#2563EB]' : 'bg-purple-50 text-purple-600'
+                        }`}>{task.status}</span>
                       </div>
                       <div className="w-24 flex justify-end">
                         <button className="text-[11px] font-bold text-[#2563EB] border border-[#2563EB] hover:bg-[#EFF6FF] px-3 py-1 rounded transition-colors">Action</button>
@@ -166,7 +217,7 @@ export default function EmployeeDashboard() {
                 )) : (
                   <div className="flex flex-col items-center justify-center py-6 text-[#64748B]">
                     <CheckCircle size={32} className="text-[#16A34A] mb-2 opacity-50" />
-                    <p className="text-sm">No tasks due today</p>
+                    <p className="text-sm">No active tasks due today</p>
                   </div>
                 )}
               </div>
@@ -177,38 +228,48 @@ export default function EmployeeDashboard() {
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-3">
                   <h2 className="font-semibold text-[#0F172A]">My Projects</h2>
-                  <span className="bg-[#EFF6FF] text-[#2563EB] text-xs font-bold px-2 py-0.5 rounded">{mockEmployee.projects.length} Active</span>
+                  <span className="bg-[#EFF6FF] text-[#2563EB] text-xs font-bold px-2 py-0.5 rounded">{projects.length} Active</span>
                 </div>
                 <button onClick={() => navigate('/employee/projects')} className="text-sm font-bold text-[#2563EB] hover:underline">
                   View All &rarr;
                 </button>
               </div>
               <div className="space-y-4">
-                {MOCK_PROJECT_STATS.slice(0, 3).map(proj => (
-                  <div key={proj.id} className="border border-[#E2E8F0] rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-[#0F172A]">{proj.name}</h3>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${proj.status === 'Active' ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-slate-100 text-slate-600'}`}>{proj.status}</span>
-                        {proj.priority === 'High' && <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider bg-red-50 text-red-600">High</span>}
+                {projects.slice(0, 3).map(proj => {
+                  const projTasks = tasks.filter(t => t.project?._id === proj._id || t.project === proj._id);
+                  const done = projTasks.filter(t => t.status === 'Done').length;
+                  const total = projTasks.length;
+                  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+                  return (
+                    <div key={proj._id} className="border border-[#E2E8F0] rounded-lg p-4 cursor-pointer" onClick={() => navigate(`/employee/projects`)}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-[#0F172A]">{proj.name}</h3>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${proj.status === 'Active' ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-slate-100 text-slate-600'}`}>{proj.status}</span>
+                          {proj.priority === 'High' && <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider bg-red-50 text-red-600">High</span>}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
+                          <Users size={14} />
+                          <span>{proj.team?.length || 0} members</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-[#64748B]">
-                        <Users size={14} />
-                        <span>{proj.teamSize} members</span>
+                      
+                      <div className="mt-3">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs text-[#64748B]">My Progress</span>
+                          <span className="text-[10px] font-bold text-[#0F172A]">{done}/{total} tasks &middot; Due {proj.endDate ? new Date(proj.endDate).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-[#2563EB] rounded-full" style={{ width: `${percent}%` }} />
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="mt-3">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-xs text-[#64748B]">My Progress</span>
-                        <span className="text-[10px] font-bold text-[#0F172A]">{proj.done}/{proj.total} tasks &middot; Due {proj.date}</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#2563EB] rounded-full" style={{ width: `${proj.total > 0 ? (proj.done/proj.total)*100 : 0}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+                {projects.length === 0 && (
+                  <p className="text-center py-6 text-[#64748B]">No project allocations found.</p>
+                )}
               </div>
             </div>
 
@@ -216,8 +277,8 @@ export default function EmployeeDashboard() {
             <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 shadow-sm">
               <h2 className="font-semibold text-[#0F172A] mb-5">Recent Activity</h2>
               <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[5px] before:-translate-x-px before:h-full before:w-0.5 before:bg-[#E2E8F0]">
-                {MOCK_ACTIVITIES.map(act => (
-                  <div key={act.id} className="relative flex items-center gap-4">
+                {activities.map(act => (
+                  <div key={act.id} className="relative flex items-center gap-4 text-left">
                     <div className={`w-3 h-3 rounded-full border-2 border-white z-10 ${act.color}`} />
                     <div className="flex-1">
                       <p className="text-sm text-[#0F172A]">{act.text}</p>
@@ -237,22 +298,22 @@ export default function EmployeeDashboard() {
             <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 shadow-sm">
               <h2 className="font-semibold text-[#0F172A] mb-4">My Workload</h2>
               <div className="flex flex-col items-center justify-center py-2">
-                <span className={`text-4xl font-black ${mockEmployee.workload > 80 ? 'text-[#DC2626]' : mockEmployee.workload > 50 ? 'text-[#D97706]' : 'text-[#16A34A]'}`}>
-                  {mockEmployee.workload}%
+                <span className={`text-4xl font-black ${workloadColor.split(' ')[0]}`}>
+                  {workload}%
                 </span>
                 <p className="text-xs text-[#64748B] mt-1 text-center font-medium">Capacity utilized</p>
               </div>
               
               <div className="mt-4">
                 <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${workloadBarColor}`} style={{ width: `${mockEmployee.workload}%` }} />
+                  <div className={`h-full rounded-full ${workloadBarColor}`} style={{ width: `${workload}%` }} />
                 </div>
                 <p className="text-xs text-center text-[#0F172A] mt-3 font-medium">
-                  {mockEmployee.projects.length} active projects
+                  {projects.length} active projects
                 </p>
               </div>
 
-              {mockEmployee.workload > 80 && (
+              {workload > 80 && (
                 <div className="mt-4 p-3 bg-[#FEF3C7] border border-[#D97706] rounded-lg flex items-start gap-2">
                   <AlertCircle size={16} className="text-[#D97706] shrink-0 mt-0.5" />
                   <p className="text-xs font-medium text-[#D97706]">High workload detected. Consider discussing prioritization with your manager.</p>
@@ -264,15 +325,18 @@ export default function EmployeeDashboard() {
             <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 shadow-sm">
               <h2 className="font-semibold text-[#0F172A] mb-4">Upcoming Deadlines</h2>
               <div className="space-y-3">
-                {MOCK_DEADLINES.map(dl => (
-                  <div key={dl.id} className="flex items-center gap-3">
-                    <div className={`w-1.5 h-10 rounded-full ${getUrgencyColor(dl.urgency)} shrink-0`} />
+                {tasks.filter(t => t.status !== 'Done' && t.dueDate).slice(0, 3).map(t => (
+                  <div key={t._id} className="flex items-center gap-3">
+                    <div className={`w-1.5 h-10 rounded-full ${getUrgencyColor(t.priority)} shrink-0`} />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-[#0F172A]">{dl.title}</p>
-                      <p className="text-xs text-[#64748B] mt-0.5">{dl.date}</p>
+                      <p className="text-sm font-medium text-[#0F172A]">{t.title}</p>
+                      <p className="text-xs text-[#64748B] mt-0.5">{new Date(t.dueDate).toLocaleDateString()}</p>
                     </div>
                   </div>
                 ))}
+                {tasks.filter(t => t.status !== 'Done' && t.dueDate).length === 0 && (
+                  <p className="text-xs text-[#64748B]">No upcoming task deadlines.</p>
+                )}
               </div>
             </div>
 
@@ -285,31 +349,27 @@ export default function EmployeeDashboard() {
                 </button>
               </div>
               <div className="space-y-3">
-                {MOCK_TEAM.map(member => (
-                  <div key={member.id} className="flex items-center gap-3 border border-[#E2E8F0] p-2.5 rounded-lg bg-[#F8FAFC]">
-                    <div className={`w-8 h-8 rounded-full ${member.color} text-white flex items-center justify-center text-xs font-bold shrink-0`}>
-                      {member.avatar}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-[#0F172A]">{member.name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-white border border-[#E2E8F0] text-[#64748B]">{member.role}</span>
-                        <span className="text-[10px] text-[#64748B]">{member.department}</span>
+                {team.slice(0, 3).map((member, i) => {
+                  const name = member.user?.name || member.name || 'Team Member';
+                  const initial = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                  
+                  return (
+                    <div key={member.user?._id || member._id || i} className="flex items-center gap-3 border border-[#E2E8F0] p-2.5 rounded-lg bg-[#F8FAFC]">
+                      <div className={`w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold shrink-0`}>
+                        {initial}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[#0F172A]">{name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-white border border-[#E2E8F0] text-[#64748B]">{member.role || member.user?.designation || 'Staff'}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Pending Leave Card */}
-            <div className="bg-[#FEF3C7] border border-[#D97706] rounded-xl p-4 flex items-start gap-3 shadow-sm">
-              <div className="mt-0.5 bg-white p-1.5 rounded-full text-[#D97706]">
-                <Clock size={16} />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-[#92400E]">1 leave request pending</p>
-                <p className="text-xs text-[#D97706] mt-0.5 font-medium">Pending approval by {mockEmployee.hrManager.name}</p>
+                  );
+                })}
+                {team.length === 0 && (
+                  <p className="text-xs text-[#64748B]">No team members listed.</p>
+                )}
               </div>
             </div>
 

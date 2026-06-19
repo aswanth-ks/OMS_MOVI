@@ -1,104 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
 import { 
   Columns, List, CalendarDays, RefreshCw, Eye, X, CheckCircle, 
-  Paperclip, MessageSquare, Download, UploadCloud, Search, CheckSquare, AlertCircle, PlayCircle, Send
+  Paperclip, Download, UploadCloud, Search, AlertCircle, PlayCircle, Send
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// --- MOCK DATA ---
-const mockProjects = [
-  { _id: 'proj001', name: 'OWMS Internal Platform v2' },
-  { _id: 'proj002', name: 'Data Pipeline Automation' },
-];
-
-const mockTasks = [
-  {
-    _id: "task001",
-    title: "Build Login Page UI",
-    description: "Create the login page for OWMS using React 18 and Tailwind CSS.",
-    project: mockProjects[0],
-    assignedBy: { _id: "pmo001", name: "Aswanth K", role: "PMO Lead", avatar: "AK" },
-    assignedTo: "emp001",
-    sharedWith: [
-      { name: "Sarah Connor", avatar: "SC" }
-    ],
-    priority: "High",
-    status: "In Progress",
-    effortPoints: 5,
-    dueDate: "2024-10-15T23:59:59Z",
-    subtasks: [
-      { _id: "sub001", title: "Design mobile layout", completed: true, assignedTo: "emp001" },
-      { _id: "sub002", title: "Add form validation", completed: false, assignedTo: "emp001" },
-    ],
-    comments: [
-      { _id: "com001", author: { name: "Aswanth K", avatar: "AK" }, text: "Make sure to follow the design system", createdAt: "2024-10-10T10:00:00Z" },
-    ],
-    attachments: [],
-    createdAt: "2024-10-08T09:00:00Z",
-    blocked: false,
-    overdue: false
-  },
-  {
-    _id: "task002",
-    title: "API Integration for Auth",
-    description: "Connect the login form to the backend JWT authentication endpoints.",
-    project: mockProjects[0],
-    assignedBy: { _id: "pmo001", name: "Aswanth K", role: "PMO Lead", avatar: "AK" },
-    assignedTo: "emp001",
-    sharedWith: [],
-    priority: "Critical",
-    status: "Todo",
-    effortPoints: 8,
-    dueDate: "2024-10-12T23:59:59Z",
-    subtasks: [],
-    comments: [],
-    attachments: [],
-    createdAt: "2024-10-10T09:00:00Z",
-    blocked: false,
-    overdue: true
-  },
-  {
-    _id: "task003",
-    title: "Data Ingestion Script",
-    description: "Write Python script to ingest CRM data into data warehouse.",
-    project: mockProjects[1],
-    assignedBy: { _id: "pmo002", name: "John Smith", role: "PMO Lead", avatar: "JS" },
-    assignedTo: "emp001",
-    sharedWith: [
-      { name: "John Doe", avatar: "JD" }
-    ],
-    priority: "Medium",
-    status: "In Review",
-    effortPoints: 13,
-    dueDate: "2024-10-25T23:59:59Z",
-    subtasks: [],
-    comments: [],
-    attachments: [],
-    createdAt: "2024-10-09T09:00:00Z",
-    blocked: false,
-    overdue: false
-  },
-  {
-    _id: "task004",
-    title: "Fix Pipeline Memory Leak",
-    description: "Resolve memory issues during massive ETL runs.",
-    project: mockProjects[1],
-    assignedBy: { _id: "pmo002", name: "John Smith", role: "PMO Lead", avatar: "JS" },
-    assignedTo: "emp001",
-    sharedWith: [],
-    priority: "High",
-    status: "Blocked",
-    effortPoints: 5,
-    dueDate: "2024-10-05T23:59:59Z",
-    subtasks: [],
-    comments: [],
-    attachments: [],
-    createdAt: "2024-10-01T09:00:00Z",
-    blocked: true,
-    overdue: true
-  }
-];
+import { employeeAPI } from '../../utils/api';
+import toast from 'react-hot-toast';
 
 const COLUMNS = [
   { id: 'Todo', title: 'Todo', color: 'border-l-slate-500' },
@@ -115,13 +23,15 @@ const PRIORITY_STYLES = {
 };
 
 const formatDate = (isoStr) => {
+  if (!isoStr) return 'No due date';
   const date = new Date(isoStr);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
 const getRelativeTime = (isoStr) => {
+  if (!isoStr) return '';
   const date = new Date(isoStr);
-  const now = new Date('2024-10-12T00:00:00Z');
+  const now = new Date();
   const diffInSeconds = Math.floor((now - date) / 1000);
   
   if (diffInSeconds < 60) return 'Just now';
@@ -134,10 +44,10 @@ const getRelativeTime = (isoStr) => {
 };
 
 // --- SUB-COMPONENTS ---
-const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
+const TaskDetailModal = ({ task, onClose, onStatusChange, onAddComment }) => {
   const [commentText, setCommentText] = useState('');
   const [activeTab, setActiveTab] = useState('Subtasks');
-  const [description, setDescription] = useState(task?.description || '');
+  const [description] = useState(task?.description || '');
   
   if (!task) return null;
 
@@ -148,17 +58,20 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
     Low: 'text-green-600 bg-green-100 border-green-200'
   };
 
+  const assignedByName = task.assignedBy?.name || 'Manager';
+  const assignedByAvatar = task.assignedBy?.avatar || assignedByName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Done';
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm font-sans">
-        {/* Backdrop click to close */}
         <motion.div 
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           className="absolute inset-0 cursor-pointer" 
           onClick={onClose} 
         />
         
-        {/* Modal Panel */}
         <motion.div 
           initial={{ x: 600, opacity: 0 }} 
           animate={{ x: 0, opacity: 1 }} 
@@ -167,16 +80,16 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
           className="relative w-full max-w-2xl h-full bg-white shadow-2xl flex flex-col z-10 border-l border-slate-200 overflow-hidden"
         >
           {/* Header */}
-          <div className="flex items-start justify-between px-6 py-5 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-start justify-between px-6 py-5 border-b border-slate-200 bg-slate-50 text-left">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${priorityColors[task.priority] || priorityColors.Medium}`}>
-                  {task.priority} Priority
+                  {task.priority || 'Medium'} Priority
                 </span>
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600 flex items-center gap-1 cursor-pointer hover:bg-slate-100">
                   <RefreshCw size={12} /> {task.status}
                 </span>
-                {task.overdue && task.status !== 'Done' && (
+                {isOverdue && (
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white animate-pulse">Overdue</span>
                 )}
                 {task.status === 'Blocked' && (
@@ -191,7 +104,7 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200">
+          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200 text-left">
             
             {/* Left Column (60%) */}
             <div className="flex-[3] p-6 space-y-8">
@@ -199,12 +112,9 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
               {/* Description */}
               <section>
                 <h3 className="text-sm font-bold text-slate-900 mb-2">Description</h3>
-                <textarea 
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full min-h-[100px] p-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-[#2563EB] outline-none resize-y"
-                  placeholder="Add a more detailed description..."
-                />
+                <div className="w-full min-h-[100px] p-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg">
+                  {description || 'No description provided.'}
+                </div>
               </section>
 
               {/* Subtabs for content */}
@@ -236,18 +146,22 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
                   <div className="space-y-4">
                     {task.comments?.length > 0 ? (
                       <div className="space-y-3">
-                        {task.comments.map((c, i) => (
-                          <div key={i} className="flex gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">{c.author.avatar}</div>
-                            <div className="flex-1 bg-slate-50 p-3 rounded-tr-xl rounded-b-xl border border-slate-200">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs font-bold text-slate-900">{c.author.name}</span>
-                                <span className="text-[10px] text-slate-500">{getRelativeTime(c.createdAt)}</span>
+                        {task.comments.map((c, i) => {
+                          const authorName = c.author?.name || 'User';
+                          const authorAvatar = c.author?.avatar || authorName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                          return (
+                            <div key={c._id || i} className="flex gap-3">
+                              <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">{authorAvatar}</div>
+                              <div className="flex-1 bg-slate-50 p-3 rounded-tr-xl rounded-b-xl border border-slate-200">
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="text-xs font-bold text-slate-900">{authorName}</span>
+                                  <span className="text-[10px] text-slate-500">{getRelativeTime(c.createdAt)}</span>
+                                </div>
+                                <p className="text-sm text-slate-700">{c.text}</p>
                               </div>
-                              <p className="text-sm text-slate-700">{c.text}</p>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-slate-500 italic">No comments yet.</p>
@@ -262,7 +176,16 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
                           className="w-full h-16 p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none" 
                           placeholder="Write a comment..." 
                         />
-                        <button disabled={!commentText.trim()} className="mt-2 px-3 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">Post Comment</button>
+                        <button 
+                          disabled={!commentText.trim()} 
+                          onClick={() => {
+                            onAddComment(task._id, commentText);
+                            setCommentText('');
+                          }}
+                          className="mt-2 px-3 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          Post Comment
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -280,7 +203,7 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-slate-900">{att.name}</p>
-                                <p className="text-xs text-slate-500">{att.size}</p>
+                                <p className="text-xs text-slate-500">{(att.size / 1024).toFixed(1)} KB</p>
                               </div>
                             </div>
                             <button className="text-slate-400 hover:text-[#2563EB] p-1.5 rounded-full hover:bg-slate-200 transition-colors">
@@ -310,16 +233,16 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
                   <p className="text-xs text-slate-500 mb-1">Assigned By</p>
                   <div className="flex items-center gap-2 p-1.5 -ml-1.5 rounded-lg">
                     <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold">
-                      {task.assignedBy.avatar}
+                      {assignedByAvatar}
                     </div>
-                    <span className="text-sm font-bold text-slate-700">{task.assignedBy.name}</span>
+                    <span className="text-sm font-bold text-slate-700">{assignedByName}</span>
                   </div>
                 </div>
 
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Due Date</p>
-                  <div className={`flex items-center gap-2 text-sm font-bold ${task.overdue && task.status !== 'Done' ? 'text-red-600' : 'text-slate-700'}`}>
-                    <CalendarDays size={16} className={task.overdue && task.status !== 'Done' ? 'text-red-600' : 'text-slate-400'} />
+                  <div className={`flex items-center gap-2 text-sm font-bold ${isOverdue ? 'text-red-600' : 'text-slate-700'}`}>
+                    <CalendarDays size={16} className={isOverdue ? 'text-red-600' : 'text-slate-400'} />
                     {formatDate(task.dueDate)}
                   </div>
                 </div>
@@ -327,8 +250,8 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Effort Estimate</p>
                   <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <div className="w-6 h-6 rounded bg-slate-200 flex items-center justify-center text-xs">
-                      {task.effortPoints}
+                    <div className="w-6 h-6 rounded bg-slate-200 flex items-center justify-center text-xs font-bold">
+                      {task.effortPoints || 0}
                     </div>
                     Points
                   </div>
@@ -337,22 +260,9 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Project</p>
                   <span className="inline-block px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold text-[#2563EB]">
-                    {task.project.name}
+                    {task.project?.name || 'Project'}
                   </span>
                 </div>
-                
-                {task.sharedWith?.length > 0 && (
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Shared With</p>
-                    <div className="flex -space-x-2 mt-1">
-                      {task.sharedWith.map((user, idx) => (
-                        <div key={idx} className="w-7 h-7 rounded-full border-2 border-slate-50 bg-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-700" title={user.name}>
-                          {user.avatar}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-8 mb-4">Quick Actions</h3>
@@ -419,19 +329,75 @@ const TaskDetailModal = ({ task, onClose, onStatusChange }) => {
 export default function EmployeeTasks() {
   const [view, setView] = useState('board'); // 'board' or 'list'
   const [selectedTask, setSelectedTask] = useState(null);
-  const [tasks, setTasks] = useState(mockTasks);
+  const [tasks, setTasks] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [projectFilter, setProjectFilter] = useState('All Projects');
+  const [loading, setLoading] = useState(true);
 
-  const filteredTasks = tasks.filter(task => projectFilter === 'All Projects' || task.project.name === projectFilter);
-  const overdueCount = tasks.filter(t => t.overdue && t.status !== 'Done').length;
+  const fetchTasksData = async () => {
+    setLoading(true);
+    try {
+      const tasksRes = await employeeAPI.getTasks();
+      setTasks(tasksRes.data.data || []);
 
-  const handleStatusChange = (taskId, newStatus) => {
-    setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
+      const projectsRes = await employeeAPI.getProjects();
+      setProjects(projectsRes.data.data || []);
+    } catch (err) {
+      toast.error('Failed to load tasks');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasksData();
+  }, []);
+
+  const filteredTasks = tasks.filter(task => 
+    projectFilter === 'All Projects' || 
+    task.project?.name === projectFilter || 
+    task.project === projectFilter
+  );
+  
+  const overdueCount = tasks.filter(t => {
+    const isOverdue = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'Done';
+    return isOverdue;
+  }).length;
+
+  const handleStatusChange = async (taskId, newStatus) => {
+    try {
+      await employeeAPI.updateTaskStatus(taskId, { status: newStatus });
+      toast.success(`Task status updated to ${newStatus}`);
+      
+      // Reload tasks from backend
+      const tasksRes = await employeeAPI.getTasks();
+      setTasks(tasksRes.data.data || []);
+    } catch (err) {
+      toast.error('Failed to update task status');
+    }
+  };
+
+  const handleAddComment = async (taskId, text) => {
+    try {
+      await employeeAPI.addTaskComment(taskId, { text });
+      toast.success('Comment added');
+
+      // Reload tasks from backend
+      const tasksRes = await employeeAPI.getTasks();
+      const updatedTasks = tasksRes.data.data || [];
+      setTasks(updatedTasks);
+
+      // Update selected task reference
+      const updatedTask = updatedTasks.find(t => t._id === taskId);
+      if (updatedTask) setSelectedTask(updatedTask);
+    } catch (err) {
+      toast.error('Failed to post comment');
+    }
   };
 
   return (
     <PageWrapper>
-      <div className="w-full flex flex-col h-[calc(100vh-64px)] overflow-hidden font-sans pb-4">
+      <div className="w-full flex flex-col h-[calc(100vh-64px)] overflow-hidden font-sans pb-4 text-left">
         
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6 px-4 sm:px-6 md:px-8 shrink-0">
@@ -454,7 +420,7 @@ export default function EmployeeTasks() {
               className="text-sm border border-[#E2E8F0] rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-[#2563EB] font-medium text-[#0F172A]"
             >
               <option value="All Projects">All Projects</option>
-              {mockProjects.map(p => (
+              {projects.map(p => (
                 <option key={p._id} value={p.name}>{p.name}</option>
               ))}
             </select>
@@ -477,154 +443,172 @@ export default function EmployeeTasks() {
         </div>
 
         {/* CONTENT AREA */}
-        <div className="flex-1 overflow-hidden mt-6 px-4 sm:px-6 md:px-8">
-          
-          {view === 'board' ? (
-            // --- BOARD VIEW ---
-            <div className="flex gap-6 h-full overflow-x-auto custom-scrollbar pb-4">
-              {COLUMNS.map(col => (
-                <div key={col.id} className="w-[300px] sm:w-[320px] shrink-0 flex flex-col h-full bg-[#F8FAFC] rounded-2xl border border-[#E2E8F0]">
-                  {/* Column Header */}
-                  <div className={`p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white rounded-t-2xl border-t-4 ${col.color}`}>
-                    <h3 className="font-bold text-[#0F172A]">{col.title}</h3>
-                    <span className="bg-[#F1F5F9] text-[#64748B] text-xs font-bold px-2.5 py-1 rounded-full">
-                      {filteredTasks.filter(t => t.status === col.id).length}
-                    </span>
-                  </div>
-                  
-                  {/* Cards */}
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
-                    {filteredTasks.filter(t => t.status === col.id).map(task => (
-                      <div 
-                        key={task._id} 
-                        onClick={() => setSelectedTask(task)}
-                        className={`bg-white p-4 rounded-xl shadow-sm border cursor-pointer hover:shadow-md hover:border-blue-300 transition-all group relative ${task.overdue ? 'border-red-300 bg-red-50/30' : 'border-[#E2E8F0]'}`}
-                      >
-                        {task.overdue && <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-500 m-2 animate-pulse" />}
-                        {task.status === 'Blocked' && (
-                          <div className="absolute top-0 right-0 text-[9px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded m-2">BLOCKED</div>
-                        )}
-                        
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${PRIORITY_STYLES[task.priority].color}`}>
-                            {task.priority}
-                          </span>
-                        </div>
-                        <h4 className="text-sm font-bold text-[#0F172A] mb-1 leading-tight group-hover:text-[#2563EB] transition-colors pr-4">{task.title}</h4>
-                        
-                        {/* Show Project explicitly on card */}
-                        <div className="text-[10px] font-semibold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded inline-block mb-3 truncate max-w-full">
-                          {task.project.name}
-                        </div>
+        {loading ? (
+          <div className="flex justify-center items-center py-24 flex-1">
+            <span className="material-symbols-outlined text-[32px] text-[#2563EB] animate-spin">sync</span>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-hidden mt-6 px-4 sm:px-6 md:px-8">
+            
+            {view === 'board' ? (
+              // --- BOARD VIEW ---
+              <div className="flex gap-6 h-full overflow-x-auto custom-scrollbar pb-4">
+                {COLUMNS.map(col => (
+                  <div key={col.id} className="w-[300px] sm:w-[320px] shrink-0 flex flex-col h-full bg-[#F8FAFC] rounded-2xl border border-[#E2E8F0]">
+                    {/* Column Header */}
+                    <div className={`p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white rounded-t-2xl border-t-4 ${col.color}`}>
+                      <h3 className="font-bold text-[#0F172A]">{col.title}</h3>
+                      <span className="bg-[#F1F5F9] text-[#64748B] text-xs font-bold px-2.5 py-1 rounded-full">
+                        {filteredTasks.filter(t => t.status === col.id).length}
+                      </span>
+                    </div>
+                    
+                    {/* Cards */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3">
+                      {filteredTasks.filter(t => t.status === col.id).map(task => {
+                        const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Done';
+                        const assignedByName = task.assignedBy?.name || 'Manager';
+                        const assignedByAvatar = task.assignedBy?.avatar || assignedByName.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
 
-                        {/* Card Footer */}
-                        <div className="flex items-center justify-between border-t border-[#E2E8F0] pt-3">
-                          <div className="flex -space-x-1">
-                            <div className="w-6 h-6 rounded-full bg-[#1E293B] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white relative z-10" title={`Assigned by ${task.assignedBy.name}`}>
-                              {task.assignedBy.avatar}
-                            </div>
-                            {task.sharedWith.map((u, i) => (
-                              <div key={i} className="w-6 h-6 rounded-full bg-slate-300 text-slate-700 flex items-center justify-center text-[10px] font-bold border-2 border-white relative z-0">
-                                {u.avatar}
-                              </div>
-                            ))}
-                          </div>
-                          <div className={`flex items-center gap-1.5 text-xs font-semibold ${task.overdue ? 'text-red-600' : 'text-[#64748B]'}`}>
-                            <CalendarDays size={14} />
-                            {formatDate(task.dueDate)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            // --- LIST VIEW ---
-            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm h-full flex flex-col">
-              <div className="p-4 border-b border-[#E2E8F0] flex gap-4">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Search tasks..." 
-                    className="w-full pl-10 pr-4 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#2563EB] transition-colors"
-                  />
-                </div>
-              </div>
-              <div className="flex-1 overflow-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse min-w-[800px]">
-                  <thead className="bg-[#F8FAFC] sticky top-0 z-10 border-b border-[#E2E8F0]">
-                    <tr>
-                      <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Priority</th>
-                      <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Task</th>
-                      <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Project</th>
-                      <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Due Date</th>
-                      <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Effort</th>
-                      <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Status</th>
-                      <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTasks.map(task => (
-                      <tr key={task._id} className={`border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors ${task.overdue && task.status !== 'Done' ? 'bg-red-50/30' : ''}`}>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${PRIORITY_STYLES[task.priority].dot}`} />
-                            <span className="text-sm font-medium text-[#0F172A]">{task.priority}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="text-sm font-bold text-[#0F172A] hover:text-[#2563EB] cursor-pointer" onClick={() => setSelectedTask(task)}>
-                            {task.title}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="text-xs bg-[#EFF6FF] text-[#2563EB] font-bold px-2 py-0.5 rounded">{task.project.name}</span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className={`text-sm ${task.overdue && task.status !== 'Done' ? 'text-red-600 font-bold' : 'text-[#64748B]'}`}>
-                            {formatDate(task.dueDate)}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="text-sm text-[#0F172A] flex items-center gap-1.5">
-                            <span className="font-bold">{task.effortPoints}</span> <span className="text-xs text-[#64748B]">pts</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          {task.status === 'Blocked' ? (
-                            <span className="text-xs font-bold px-2 py-1 rounded bg-red-100 text-red-700">Blocked</span>
-                          ) : (
-                            <span className="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-700">{task.status}</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <button 
+                        return (
+                          <div 
+                            key={task._id} 
                             onClick={() => setSelectedTask(task)}
-                            className="text-[#64748B] hover:text-[#2563EB] p-2 rounded-lg hover:bg-[#E2E8F0] transition-colors"
+                            className={`bg-white p-4 rounded-xl shadow-sm border cursor-pointer hover:shadow-md hover:border-blue-300 transition-all group relative ${isOverdue ? 'border-red-300 bg-red-50/30' : 'border-[#E2E8F0]'}`}
                           >
-                            <Eye size={18} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                            {isOverdue && <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-500 m-2 animate-pulse" />}
+                            {task.status === 'Blocked' && (
+                              <div className="absolute top-0 right-0 text-[9px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded m-2">BLOCKED</div>
+                            )}
+                            
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${PRIORITY_STYLES[task.priority]?.color || PRIORITY_STYLES.Medium.color}`}>
+                                {task.priority || 'Medium'}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-bold text-[#0F172A] mb-1 leading-tight group-hover:text-[#2563EB] transition-colors pr-4">{task.title}</h4>
+                            
+                            {/* Show Project explicitly on card */}
+                            <div className="text-[10px] font-semibold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded inline-block mb-3 truncate max-w-full">
+                              {task.project?.name || 'Project'}
+                            </div>
 
-        </div>
+                            {/* Card Footer */}
+                            <div className="flex items-center justify-between border-t border-[#E2E8F0] pt-3">
+                              <div className="flex -space-x-1">
+                                <div className="w-6 h-6 rounded-full bg-[#1E293B] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white relative z-10" title={`Assigned by ${assignedByName}`}>
+                                  {assignedByAvatar}
+                                </div>
+                              </div>
+                              <div className={`flex items-center gap-1.5 text-xs font-semibold ${isOverdue ? 'text-red-600' : 'text-[#64748B]'}`}>
+                                <CalendarDays size={14} />
+                                {formatDate(task.dueDate)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // --- LIST VIEW ---
+              <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm h-full flex flex-col">
+                <div className="p-4 border-b border-[#E2E8F0] flex gap-4">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search tasks..." 
+                      className="w-full pl-10 pr-4 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#2563EB] transition-colors"
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse min-w-[800px]">
+                    <thead className="bg-[#F8FAFC] sticky top-0 z-10 border-b border-[#E2E8F0]">
+                      <tr>
+                        <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Priority</th>
+                        <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Task</th>
+                        <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Project</th>
+                        <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Due Date</th>
+                        <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Effort</th>
+                        <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Status</th>
+                        <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTasks.map(task => {
+                        const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Done';
+                        return (
+                          <tr key={task._id} className={`border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors ${isOverdue ? 'bg-red-50/30' : ''}`}>
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${PRIORITY_STYLES[task.priority]?.dot || PRIORITY_STYLES.Medium.dot}`} />
+                                <span className="text-sm font-medium text-[#0F172A]">{task.priority || 'Medium'}</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className="text-sm font-bold text-[#0F172A] hover:text-[#2563EB] cursor-pointer" onClick={() => setSelectedTask(task)}>
+                                {task.title}
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="text-xs bg-[#EFF6FF] text-[#2563EB] font-bold px-2 py-0.5 rounded">{task.project?.name || 'Project'}</span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className={`text-sm ${isOverdue ? 'text-red-600 font-bold' : 'text-[#64748B]'}`}>
+                                {formatDate(task.dueDate)}
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className="text-sm text-[#0F172A] flex items-center gap-1.5">
+                                <span className="font-bold">{task.effortPoints || 0}</span> <span className="text-xs text-[#64748B]">pts</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              {task.status === 'Blocked' ? (
+                                <span className="text-xs font-bold px-2 py-1 rounded bg-red-100 text-red-700">Blocked</span>
+                              ) : (
+                                <span className="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-700">{task.status}</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <button 
+                                onClick={() => setSelectedTask(task)}
+                                className="text-[#64748B] hover:text-[#2563EB] p-2 rounded-lg hover:bg-[#E2E8F0] transition-colors"
+                              >
+                                <Eye size={18} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredTasks.length === 0 && (
+                        <tr>
+                          <td colSpan="7" className="text-center py-12 text-[#64748B]">No tasks assigned.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
       </div>
 
       {/* Detail Modal */}
-      <TaskDetailModal 
-        task={selectedTask} 
-        onClose={() => setSelectedTask(null)} 
-        onStatusChange={handleStatusChange}
-      />
+      {selectedTask && (
+        <TaskDetailModal 
+          task={selectedTask} 
+          onClose={() => setSelectedTask(null)} 
+          onStatusChange={handleStatusChange}
+          onAddComment={handleAddComment}
+        />
+      )}
 
     </PageWrapper>
   );

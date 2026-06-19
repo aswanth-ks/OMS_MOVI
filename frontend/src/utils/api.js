@@ -1,8 +1,13 @@
 import axios from 'axios';
 
+const getBaseURL = () => {
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return url.endsWith('/api') ? url : `${url}/api`;
+};
+
 // Create a configured axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: getBaseURL(),
   withCredentials: true, // Send cookies/session across domains if needed
   headers: {
     'Content-Type': 'application/json',
