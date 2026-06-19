@@ -61,8 +61,11 @@ const MODULE_BAR = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const KpiCard = ({ label, value, sub, subRed, icon: Icon, topColor, iconBg, iconColor, loading }) => (
-  <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
+const KpiCard = ({ label, value, sub, subRed, icon: Icon, topColor, iconBg, iconColor, loading, onClick }) => (
+  <div
+    onClick={onClick}
+    className={`bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden transition-shadow ${onClick ? 'cursor-pointer hover:shadow-md hover:border-[#CBD5E1]' : ''}`}
+  >
     <div className={`h-1 ${topColor}`} />
     <div className="px-5 pt-4 pb-5">
       <div className="flex items-start justify-between gap-2">
@@ -255,6 +258,35 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* ── Today's Summary Strip ───────────────────────────────────────────── */}
+        {!loading && logs.length > 0 && (() => {
+          const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+          const todayLogs  = logs.filter(l => new Date(l.createdAt) >= todayStart);
+          const todayFailed = todayLogs.filter(l => l.result === 'FAILED').length;
+          const lastLog    = logs[0];
+          if (todayLogs.length === 0) return null;
+          return (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-white border border-[#E2E8F0] rounded-xl px-5 py-3 shadow-sm text-[13px]">
+              <span className="font-semibold text-[#0F172A]">Today</span>
+              <span className="text-[#64748B]">
+                <span className="font-medium text-[#0F172A]">{todayLogs.length}</span> {todayLogs.length === 1 ? 'event' : 'events'}
+              </span>
+              {todayFailed > 0 && (
+                <span className="text-[#DC2626]">
+                  <span className="font-medium">{todayFailed}</span> failed
+                </span>
+              )}
+              {todayFailed === 0 && (
+                <span className="text-[#16A34A] font-medium">No failures</span>
+              )}
+              <span className="text-[#94A3B8]">·</span>
+              <span className="text-[#64748B]">
+                Last activity <span className="font-medium text-[#0F172A]">{timeAgo(lastLog.createdAt)}</span>
+              </span>
+            </div>
+          );
+        })()}
+
         {/* ── KPI Cards ───────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
           <KpiCard
@@ -267,6 +299,7 @@ export default function AdminDashboard() {
             iconBg="bg-[#EFF6FF]"
             iconColor="text-[#2563EB]"
             loading={loading}
+            onClick={() => navigate('/admin/users')}
           />
           <KpiCard
             label="Active Users"
@@ -277,6 +310,7 @@ export default function AdminDashboard() {
             iconBg="bg-[#DCFCE7]"
             iconColor="text-[#16A34A]"
             loading={loading}
+            onClick={() => navigate('/admin/users?status=Active')}
           />
           <KpiCard
             label="Departments"
@@ -287,6 +321,7 @@ export default function AdminDashboard() {
             iconBg="bg-[#EDE9FE]"
             iconColor="text-[#7C3AED]"
             loading={loading}
+            onClick={() => navigate('/admin/departments')}
           />
           <KpiCard
             label="Roles"
@@ -297,6 +332,7 @@ export default function AdminDashboard() {
             iconBg="bg-[#FEF3C7]"
             iconColor="text-[#D97706]"
             loading={loading}
+            onClick={() => navigate('/admin/roles')}
           />
           <KpiCard
             label="Security Alerts"
@@ -308,6 +344,7 @@ export default function AdminDashboard() {
             iconBg={hasAlerts ? 'bg-[#FEE2E2]' : 'bg-[#DCFCE7]'}
             iconColor={hasAlerts ? 'text-[#DC2626]' : 'text-[#16A34A]'}
             loading={loading}
+            onClick={() => navigate('/admin/audit?result=FAILED')}
           />
         </div>
 
