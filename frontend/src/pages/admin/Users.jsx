@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Upload } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
@@ -6,10 +6,77 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import BulkImportModal from '../../components/shared/BulkImportModal';
 import { adminAPI } from '../../utils/api';
 
+// ── Hover card popup ──────────────────────────────────────────────────────────
+function UserHoverCard({ user, style }) {
+  if (!user) return null;
+  const initials = user.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
+  const role = user.role?.slug || '';
+  const avatarBg =
+    role === 'intern'      ? 'bg-emerald-100 text-emerald-700' :
+    role === 'hr-manager'  ? 'bg-violet-100 text-violet-700'   :
+    role === 'pmo-lead'    ? 'bg-cyan-100 text-cyan-700'       :
+    role === 'admin'       ? 'bg-orange-100 text-orange-700'   :
+                             'bg-blue-100 text-blue-700';
+  const isActive = user.status === 'Active';
+
+  return (
+    <div
+      style={style}
+      className="fixed z-50 w-[270px] bg-white border border-[#E2E8F0] rounded-xl shadow-2xl overflow-hidden pointer-events-none select-none"
+    >
+      {/* Top accent */}
+      <div className={`h-1 ${role === 'intern' ? 'bg-emerald-500' : role === 'hr-manager' ? 'bg-violet-500' : role === 'pmo-lead' ? 'bg-cyan-500' : 'bg-[#2563EB]'}`} />
+      <div className="px-4 pt-3.5 pb-4">
+        {/* Avatar + Name */}
+        <div className="flex items-center gap-3 mb-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-[14px] font-bold shrink-0 ring-2 ring-white ${avatarBg}`}>
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[14px] font-bold text-[#0F172A] truncate">{user.name}</p>
+            <p className="text-[11px] text-[#64748B] truncate">{user.designation || user.role?.name || '—'}</p>
+          </div>
+          <span className={`ml-auto shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${isActive ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-[#F1F5F9] text-[#94A3B8]'}`}>
+            {user.status || 'Active'}
+          </span>
+        </div>
+
+        {/* Details grid */}
+        <div className="space-y-2">
+          {[
+            { icon: 'business',      label: user.department?.name || user.department || '—' },
+            { icon: 'shield',        label: user.role?.name || '—' },
+            { icon: 'work',          label: user.employmentType || 'Full-time' },
+            { icon: 'mail',          label: user.email },
+            { icon: 'manage_accounts', label: user.manager?.name ? `Reports to ${user.manager.name}` : null },
+            { icon: 'badge',         label: user.hrManager?.name ? `HR: ${user.hrManager.name}` : null },
+          ].filter(r => r.label).map(({ icon, label }, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[15px] text-[#94A3B8] shrink-0">{icon}</span>
+              <span className="text-[12px] text-[#475569] truncate">{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-3 pt-2.5 border-t border-[#F1F5F9] flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[13px] text-[#94A3B8]">open_in_new</span>
+          <span className="text-[11px] text-[#94A3B8]">Click to view full profile</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminUsers() {
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState([]);
   const [showImport, setShowImport]   = useState(false);
+
+  // ── Hover card state ──────────────────────────────────────────────────────
+  const [hoveredUser, setHoveredUser]   = useState(null);
+  const [hoverStyle, setHoverStyle]     = useState({});
+  const hoverTimer = useRef(null);
 
   // ── Real data state ─────────────────────────────────────────────────────
   const [users, setUsers]           = useState([]);
@@ -296,7 +363,21 @@ export default function AdminUsers() {
                   </tr>
                 ) : (
                   users.map((user) => (
-                    <tr key={user._id} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0 group">
+                    <tr
+                      key={user._id}
+                      className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0 group"
+                      onMouseEnter={(e) => {
+                        clearTimeout(hoverTimer.current);
+                        hoverTimer.current = setTimeout(() => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const top  = rect.top + rect.height / 2 - 80;
+                          const left = Math.min(rect.right - 280, window.innerWidth - 290);
+                          setHoverStyle({ top: Math.max(8, top), left: Math.max(8, left) });
+                          setHoveredUser(user);
+                        }, 300);
+                      }}
+                      onMouseLeave={() => { clearTimeout(hoverTimer.current); setHoveredUser(null); }}
+                    >
                       <td className="px-4 py-3 text-center">
                         <input type="checkbox" checked={selectedIds.includes(user._id)} onChange={() => handleSelect(user._id)} className="w-4 h-4 rounded border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB]" />
                       </td>
@@ -400,6 +481,7 @@ export default function AdminUsers() {
           }).catch(() => {});
         }}
       />
+      <UserHoverCard user={hoveredUser} style={hoverStyle} />
     </PageWrapper>
   );
 }
