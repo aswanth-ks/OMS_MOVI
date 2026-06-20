@@ -135,7 +135,7 @@ export default function PMOProjects() {
     if (roleInput) {
       setNewProject(prev => ({
         ...prev,
-        requestedRoles: [...prev.requestedRoles, { role: roleInput, qty: qtyInput }]
+        requestedRoles: [...prev.requestedRoles, { role: roleInput, qty: parseInt(qtyInput) || 1 }]
       }));
       setRoleInput('');
       setQtyInput(1);
@@ -460,7 +460,7 @@ export default function PMOProjects() {
                         </div>
                         <div className="w-24">
                           <label className="block text-[12px] font-bold text-[#0F172A] mb-1.5">Quantity</label>
-                          <input type="number" min="1" value={qtyInput} onChange={e => setQtyInput(parseInt(e.target.value))} className="w-full p-2 bg-white border border-[#E2E8F0] rounded-lg text-[13px] outline-none focus:border-[#2563EB]" />
+                          <input type="number" min="1" value={isNaN(qtyInput) ? '' : qtyInput} onChange={e => setQtyInput(parseInt(e.target.value) || '')} className="w-full p-2 bg-white border border-[#E2E8F0] rounded-lg text-[13px] outline-none focus:border-[#2563EB]" />
                         </div>
                         <button onClick={handleAddRoleRequest} className="bg-[#0F172A] text-white px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#334155] transition-colors h-[38px]">
                           Add Request

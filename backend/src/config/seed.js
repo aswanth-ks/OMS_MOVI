@@ -70,7 +70,8 @@ const seedData = async () => {
       },
       { name: 'PMO Lead', slug: 'pmo-lead', isSystem: true, color: '#06b6d4', permissions: [
           permMap['users.read'], ...getPermsByPrefix('projects.'),
-          ...getPermsByPrefix('tasks.'), permMap['interns.manage'], permMap['leave.read'],
+          ...getPermsByPrefix('tasks.'), permMap['interns.read'], permMap['interns.manage'],
+          permMap['departments.read'], permMap['leave.read'],
         ]
       },
       { name: 'Employee', slug: 'employee', isSystem: true, color: '#3b82f6', permissions: [
