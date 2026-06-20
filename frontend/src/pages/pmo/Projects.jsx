@@ -93,36 +93,33 @@ export default function PMOProjects() {
     
     const empDesignation = (emp.designation || '').toLowerCase();
     const empRoleName = (emp.role?.name || '').toLowerCase();
-    const empRoleSlug = (emp.role?.slug || '').toLowerCase();
     
     return newProject.requestedRoles.some(req => {
       const reqRole = req.role.toLowerCase();
       
-      // 1. Direct substring match
-      if (empDesignation.includes(reqRole) || empRoleName.includes(reqRole) || empRoleSlug.includes(reqRole)) {
-        return true;
+      if (reqRole === 'frontend developer') {
+        return empDesignation.includes('frontend') && 
+               (empDesignation.includes('developer') || empDesignation.includes('engineer') || empDesignation.includes('dev') || empDesignation.includes('programmer')) && 
+               !empDesignation.includes('intern');
       }
       
-      // 2. Specialization match (e.g., frontend, backend, designer, design, intern)
-      const specializations = ['frontend', 'backend', 'designer', 'design', 'intern'];
-      for (const spec of specializations) {
-        if (reqRole.includes(spec) && (empDesignation.includes(spec) || empRoleName.includes(spec) || empRoleSlug.includes(spec))) {
-          return true;
-        }
+      if (reqRole === 'backend developer') {
+        return empDesignation.includes('backend') && 
+               (empDesignation.includes('developer') || empDesignation.includes('engineer') || empDesignation.includes('dev') || empDesignation.includes('programmer')) && 
+               !empDesignation.includes('intern');
       }
       
-      // 3. Generic developer/engineer match (e.g. matching general 'Software Engineer' for dev requests)
-      const isReqDev = reqRole.includes('developer') || reqRole.includes('engineer') || reqRole.includes('stack');
-      const isEmpDev = empDesignation.includes('developer') || empDesignation.includes('engineer') || empDesignation.includes('programmer') || empRoleSlug.includes('developer');
-      
-      if (isReqDev && isEmpDev) {
-        // Prevent cross-specialization matching (e.g. don't match Frontend Dev request with Backend Dev employee)
-        if (reqRole.includes('frontend') && empDesignation.includes('backend')) return false;
-        if (reqRole.includes('backend') && empDesignation.includes('frontend')) return false;
-        return true;
+      if (reqRole === 'full stack intern') {
+        return empDesignation.includes('intern') && 
+               (empDesignation.includes('full stack') || empDesignation.includes('developer') || empDesignation.includes('dev') || empDesignation.includes('frontend') || empDesignation.includes('backend'));
       }
       
-      return false;
+      if (reqRole === 'ui/ux designer') {
+        return empDesignation.includes('designer') && 
+               (empDesignation.includes('ui') || empDesignation.includes('ux') || empDesignation.includes('product') || empDesignation.includes('web'));
+      }
+      
+      return empDesignation.includes(reqRole) || empRoleName.includes(reqRole);
     });
   });
 
