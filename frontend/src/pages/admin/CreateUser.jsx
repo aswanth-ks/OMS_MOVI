@@ -3,6 +3,34 @@ import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
 import { adminAPI } from '../../utils/api';
 
+const Field = ({ label, required, hint, children }) => (
+  <div>
+    <label className="block text-[12px] font-semibold text-[#475569] uppercase tracking-wide mb-1.5">
+      {label}{required && <span className="text-[#DC2626] ml-0.5">*</span>}
+    </label>
+    {children}
+    {hint && <p className="text-[11px] text-[#94A3B8] mt-1">{hint}</p>}
+  </div>
+);
+
+const SelectWrapper = ({ children }) => (
+  <div className="relative">
+    {children}
+    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none text-[18px]">expand_more</span>
+  </div>
+);
+
+const SectionHeader = ({ number, icon, title, desc }) => (
+  <div className="lg:col-span-1">
+    <div className="flex items-center gap-2 mb-3">
+      <span className="w-6 h-6 rounded-full bg-[#2563EB] text-white text-[11px] font-bold flex items-center justify-center shrink-0">{number}</span>
+      <span className="material-symbols-outlined text-[#2563EB] text-[20px]">{icon}</span>
+      <h2 className="text-[15px] font-bold text-[#0F172A]">{title}</h2>
+    </div>
+    <p className="text-[13px] text-[#64748B] leading-relaxed pl-8">{desc}</p>
+  </div>
+);
+
 const EMP_TYPES = [
   { value: 'Full-time', label: 'Full-time',  icon: 'work',       desc: 'Permanent employee' },
   { value: 'Part-time', label: 'Part-time',  icon: 'schedule',   desc: 'Reduced hours'      },
@@ -108,34 +136,6 @@ export default function AdminCreateUser() {
 
   const inputCls = 'w-full border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-[13px] text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-colors bg-white';
   const selectCls = `${inputCls} appearance-none cursor-pointer`;
-
-  const Field = ({ label, required, hint, children }) => (
-    <div>
-      <label className="block text-[12px] font-semibold text-[#475569] uppercase tracking-wide mb-1.5">
-        {label}{required && <span className="text-[#DC2626] ml-0.5">*</span>}
-      </label>
-      {children}
-      {hint && <p className="text-[11px] text-[#94A3B8] mt-1">{hint}</p>}
-    </div>
-  );
-
-  const SelectWrapper = ({ children }) => (
-    <div className="relative">
-      {children}
-      <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none text-[18px]">expand_more</span>
-    </div>
-  );
-
-  const SectionHeader = ({ number, icon, title, desc }) => (
-    <div className="lg:col-span-1">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-6 h-6 rounded-full bg-[#2563EB] text-white text-[11px] font-bold flex items-center justify-center shrink-0">{number}</span>
-        <span className="material-symbols-outlined text-[#2563EB] text-[20px]">{icon}</span>
-        <h2 className="text-[15px] font-bold text-[#0F172A]">{title}</h2>
-      </div>
-      <p className="text-[13px] text-[#64748B] leading-relaxed pl-8">{desc}</p>
-    </div>
-  );
 
   const selectedRole = roles.find(r => r._id === formData.role);
 

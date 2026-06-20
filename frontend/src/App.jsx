@@ -119,8 +119,8 @@ export default function App() {
       <Route path="/hr/employees" element={<ProtectedRoute allowedRoles={['hr']}><HREmployees /></ProtectedRoute>} />
       <Route path="/hr/employees/new" element={<ProtectedRoute allowedRoles={['hr']}><HRAddEmployee /></ProtectedRoute>} />
       <Route path="/hr/employees/:id" element={<ProtectedRoute allowedRoles={['hr']}><HREmployeeDetails /></ProtectedRoute>} />
-      <Route path="/hr/interns" element={<ProtectedRoute allowedRoles={['hr']}><HRInterns /></ProtectedRoute>} />
-      <Route path="/hr/interns/:id" element={<ProtectedRoute allowedRoles={['hr']}><HRInternDetails /></ProtectedRoute>} />
+      <Route path="/hr/interns"    element={<ProtectedRoute allowedRoles={['hr']} permission={{ resource: 'Interns', action: 'read' }}><HRInterns /></ProtectedRoute>} />
+      <Route path="/hr/interns/:id" element={<ProtectedRoute allowedRoles={['hr']} permission={{ resource: 'Interns', action: 'read' }}><HRInternDetails /></ProtectedRoute>} />
       <Route path="/hr/onboarding" element={<ProtectedRoute allowedRoles={['hr']}><HROnboarding /></ProtectedRoute>} />
       <Route path="/hr/attendance" element={<ProtectedRoute allowedRoles={['hr']}><HRAttendance /></ProtectedRoute>} />
       <Route path="/hr/documents" element={<ProtectedRoute allowedRoles={['hr']}><HRDocuments /></ProtectedRoute>} />
@@ -143,25 +143,34 @@ export default function App() {
       <Route path="/pmo/reports" element={<ProtectedRoute allowedRoles={['pmo']}><PMOReports /></ProtectedRoute>} />
       <Route path="/pmo/profile" element={<ProtectedRoute allowedRoles={['pmo']}><PMOProfile /></ProtectedRoute>} />
 
-      {/* Admin */}
-      <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/users/new" element={<ProtectedRoute allowedRoles={['admin']}><AdminCreateUser /></ProtectedRoute>} />
-      <Route path="/admin/users/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminUserDetails /></ProtectedRoute>} />
-      <Route path="/admin/users/:id/edit" element={<ProtectedRoute allowedRoles={['admin']}><AdminEditUser /></ProtectedRoute>} />
-      <Route path="/admin/departments" element={<ProtectedRoute allowedRoles={['admin']}><AdminDepartments /></ProtectedRoute>} />
-      <Route path="/admin/departments/new" element={<ProtectedRoute allowedRoles={['admin']}><AdminCreateDepartment /></ProtectedRoute>} />
-      <Route path="/admin/departments/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminDepartmentDetails /></ProtectedRoute>} />
-      <Route path="/admin/departments/:id/edit" element={<ProtectedRoute allowedRoles={['admin']}><AdminEditDepartment /></ProtectedRoute>} />
-      <Route path="/admin/roles" element={<ProtectedRoute allowedRoles={['admin']}><AdminRoles /></ProtectedRoute>} />
-      <Route path="/admin/roles/new" element={<ProtectedRoute allowedRoles={['admin']}><AdminCreateRole /></ProtectedRoute>} />
-      <Route path="/admin/roles/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminRoleDetails /></ProtectedRoute>} />
-      <Route path="/admin/roles/:id/edit" element={<ProtectedRoute allowedRoles={['admin']}><AdminEditRole /></ProtectedRoute>} />
+      {/* Admin — strictly admin-only (security-sensitive) */}
+      <Route path="/admin/dashboard"    element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/access-matrix" element={<ProtectedRoute allowedRoles={['admin']}><AdminAccessMatrix /></ProtectedRoute>} />
-      <Route path="/admin/audit" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
-      <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} />
-      <Route path="/admin/reports/new" element={<ProtectedRoute allowedRoles={['admin']}><AdminCreateReport /></ProtectedRoute>} />
-      <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
+      <Route path="/admin/settings"     element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Settings', action: 'manage' }}><AdminSettings /></ProtectedRoute>} />
+
+      {/* Admin — Users: admin always, others if granted Users permission */}
+      <Route path="/admin/users"        element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Users', action: 'read' }}><AdminUsers /></ProtectedRoute>} />
+      <Route path="/admin/users/new"    element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Users', action: 'create' }}><AdminCreateUser /></ProtectedRoute>} />
+      <Route path="/admin/users/:id"    element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Users', action: 'read' }}><AdminUserDetails /></ProtectedRoute>} />
+      <Route path="/admin/users/:id/edit" element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Users', action: 'update' }}><AdminEditUser /></ProtectedRoute>} />
+
+      {/* Admin — Departments: admin always, others if granted */}
+      <Route path="/admin/departments"          element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Departments', action: 'read' }}><AdminDepartments /></ProtectedRoute>} />
+      <Route path="/admin/departments/new"      element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Departments', action: 'create' }}><AdminCreateDepartment /></ProtectedRoute>} />
+      <Route path="/admin/departments/:id"      element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Departments', action: 'read' }}><AdminDepartmentDetails /></ProtectedRoute>} />
+      <Route path="/admin/departments/:id/edit" element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Departments', action: 'update' }}><AdminEditDepartment /></ProtectedRoute>} />
+
+      {/* Admin — Roles: admin always, others if granted */}
+      <Route path="/admin/roles"        element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Roles', action: 'read' }}><AdminRoles /></ProtectedRoute>} />
+      <Route path="/admin/roles/new"    element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Roles', action: 'create' }}><AdminCreateRole /></ProtectedRoute>} />
+      <Route path="/admin/roles/:id"    element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Roles', action: 'read' }}><AdminRoleDetails /></ProtectedRoute>} />
+      <Route path="/admin/roles/:id/edit" element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Roles', action: 'update' }}><AdminEditRole /></ProtectedRoute>} />
+
+      {/* Admin — Audit & Reports: admin always, others if granted */}
+      <Route path="/admin/audit"        element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Audit Logs', action: 'read' }}><AdminAuditLogs /></ProtectedRoute>} />
+      <Route path="/admin/reports"      element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Reports', action: 'read' }}><AdminReports /></ProtectedRoute>} />
+      <Route path="/admin/reports/new"  element={<ProtectedRoute allowedRoles={['admin']} permission={{ resource: 'Reports', action: 'create' }}><AdminCreateReport /></ProtectedRoute>} />
+
       
       {/* Global Profile Route */}
       <Route path="/profile" element={<ProtectedRoute allowedRoles={['intern', 'hr', 'pmo', 'admin']}><Profile /></ProtectedRoute>} />

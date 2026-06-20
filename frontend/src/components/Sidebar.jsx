@@ -2,6 +2,18 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Grid2X2, CheckSquare, Users, GraduationCap, BarChart2, LayoutDashboard, CalendarDays, Clock, BookOpen, User, Briefcase } from 'lucide-react';
 
+// Pages that can be unlocked for any role via the Access Matrix.
+// Shown in "Granted Access" sidebar section when a non-native role has the permission.
+const CROSS_ROLE_LINKS = [
+  { resource: 'Users',      action: 'read',   to: '/admin/users',       icon: 'group',     label: 'Users'       },
+  { resource: 'Departments',action: 'read',   to: '/admin/departments', icon: 'domain',    label: 'Departments' },
+  { resource: 'Roles',      action: 'read',   to: '/admin/roles',       icon: 'badge',     label: 'Roles'       },
+  { resource: 'Audit Logs', action: 'read',   to: '/admin/audit',       icon: 'history',   label: 'Audit Logs'  },
+  { resource: 'Reports',    action: 'read',   to: '/admin/reports',     icon: 'analytics', label: 'Reports'     },
+  { resource: 'Interns',    action: 'read',   to: '/hr/interns',        icon: 'school',    label: 'Interns'     },
+  { resource: 'Settings',   action: 'manage', to: '/admin/settings',    icon: 'settings',  label: 'Settings'    },
+];
+
 const NAV_CONFIG = {
   employee: [
     { to: '/employee/dashboard', icon: LayoutDashboard, label: 'Dashboard', isLucide: true },
@@ -56,7 +68,7 @@ const NAV_CONFIG = {
 };
 
 export default function Sidebar({ collapsed, setCollapsed }) {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   // user.role from real backend is a populated object { slug, name, ... }
   // Resolve to the NAV_CONFIG key (legacy short slugs)
   const resolveNavKey = (role) => {
@@ -78,6 +90,12 @@ export default function Sidebar({ collapsed, setCollapsed }) {
 
   const navKey = resolveNavKey(user?.role);
   const links = NAV_CONFIG[navKey] || [];
+
+  // Extra links unlocked via Access Matrix for this user's role
+  const existingPaths = new Set(links.map(l => l.to));
+  const grantedLinks = (navKey === 'admin') ? [] : CROSS_ROLE_LINKS.filter(
+    l => !existingPaths.has(l.to) && hasPermission(l.resource, l.action)
+  );
 
   const isIntern = navKey === 'intern';
 
@@ -108,7 +126,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
             className={({ isActive }) => {
               let activeClass = '';
               let idleClass = '';
-              
+
               if (isIntern) {
                 activeClass = 'bg-[#2563EB] text-white font-medium';
                 idleClass = 'text-slate-300 hover:bg-[#334155] hover:text-white';
@@ -122,10 +140,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           >
             {isLucide ? (
               <span className="flex-shrink-0 flex items-center justify-center w-[20px]">
-                {(() => {
-                  const Icon = icon;
-                  return <Icon size={18} />;
-                })()}
+                {(() => { const Icon = icon; return <Icon size={18} />; })()}
               </span>
             ) : (
               <span className="material-symbols-outlined text-[20px] flex-shrink-0">{icon}</span>
@@ -133,6 +148,40 @@ export default function Sidebar({ collapsed, setCollapsed }) {
             {!collapsed && <span className="text-[13px] whitespace-nowrap">{label}</span>}
           </NavLink>
         ))}
+
+        {/* Granted Access — links unlocked via Access Matrix */}
+        {grantedLinks.length > 0 && (
+          <div className={`${collapsed ? 'pt-3' : 'pt-4'}`}>
+            {!collapsed && (
+              <div className="flex items-center gap-1.5 px-3 mb-2">
+                <div className="flex-1 h-px bg-[#E2E8F0]" />
+                <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider whitespace-nowrap">Granted Access</span>
+                <div className="flex-1 h-px bg-[#E2E8F0]" />
+              </div>
+            )}
+            {collapsed && <div className="h-px bg-[#E2E8F0] mb-3" />}
+            {grantedLinks.map(({ to, icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                title={collapsed ? label : ''}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] ${isActive ? 'bg-[#EFF6FF] text-[#2563EB] font-medium' : ''} ${collapsed ? 'justify-center px-0 py-3' : ''}`
+                }
+              >
+                <span className="material-symbols-outlined text-[20px] flex-shrink-0">{icon}</span>
+                {!collapsed && (
+                  <span className="text-[13px] whitespace-nowrap flex-1">{label}</span>
+                )}
+                {!collapsed && (
+                  <span className="text-[9px] font-bold text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                    Read
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* Intern Progress Card (Bottom of Sidebar) */}

@@ -1,48 +1,56 @@
-import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import RestrictedPage from '../components/shared/RestrictedPage';
 
 // Maps real backend role slugs → dashboard paths
 const ROLE_HOME = {
   'super-admin': '/admin/dashboard',
-  'admin': '/admin/dashboard',
-  'hr-manager': '/hr/dashboard',
-  'pmo-lead': '/pmo/dashboard',
-  'employee': '/employee/dashboard',
-  'intern': '/intern/dashboard',
+  'admin':       '/admin/dashboard',
+  'hr-manager':  '/hr/dashboard',
+  'pmo-lead':    '/pmo/dashboard',
+  'employee':    '/employee/dashboard',
+  'intern':      '/intern/dashboard',
 };
 
-// allowedRoles expects real role slugs from backend (e.g. 'admin', 'hr-manager')
-// For backwards-compat with short slugs used in App.jsx we also check legacy mappings
+// For backwards-compat with short slugs used in App.jsx
 const LEGACY_SLUG_MAP = {
-  admin: ['admin', 'super-admin'],
-  hr: ['hr-manager'],
-  pmo: ['pmo-lead'],
+  admin:    ['admin', 'super-admin'],
+  hr:       ['hr-manager'],
+  pmo:      ['pmo-lead'],
   employee: ['employee'],
-  intern: ['intern'],
+  intern:   ['intern'],
 };
 
 function resolveSlug(user) {
   if (!user) return null;
-  // Real backend response: user.role is a populated object with .slug
   if (user.role?.slug) return user.role.slug;
-  // Fallback: user.role is already a string slug
   if (typeof user.role === 'string') return user.role;
   return null;
 }
 
-export function ProtectedRoute({ children, allowedRoles }) {
-  const { user, loading } = useAuth();
+/**
+ * ProtectedRoute
+ *
+ * allowedRoles  — array of role slugs that always have access (e.g. ['admin'])
+ * permission    — { resource, action } — ANY authenticated user with this permission also gets access
+ *
+ * Decision table:
+ *   super-admin                     → always allow
+ *   role matches allowedRoles        → allow
+ *   role doesn't match BUT has permission → allow
+ *   role doesn't match AND no permission  → show RestrictedPage (if permission prop given)
+ *                                          OR redirect to /unauthorized (if no permission prop)
+ */
+export function ProtectedRoute({ children, allowedRoles, permission }) {
+  const { user, loading, hasPermission } = useAuth();
   const location = useLocation();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <div className="spinner border-primary/30 border-t-primary" />
-          </div>
-          <p className="text-slate-500 text-sm font-medium">Loading...</p>
+          <div className="w-10 h-10 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
+          <p className="text-[13px] text-[#64748B] font-medium">Loading…</p>
         </div>
       </div>
     );
@@ -50,23 +58,30 @@ export function ProtectedRoute({ children, allowedRoles }) {
 
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
 
-  if (allowedRoles) {
-    const userSlug = resolveSlug(user);
+  const userSlug = resolveSlug(user);
 
-    // Super-admin bypasses all role restrictions
-    if (userSlug === 'super-admin') return children;
+  // Super-admin bypasses everything
+  if (userSlug === 'super-admin') return children;
 
-    // Build the set of accepted real slugs from allowedRoles list
-    const accepted = new Set(
-      allowedRoles.flatMap((r) => LEGACY_SLUG_MAP[r] ?? [r])
-    );
+  // Build the set of accepted role slugs
+  const accepted = new Set(
+    (allowedRoles || []).flatMap((r) => LEGACY_SLUG_MAP[r] ?? [r])
+  );
+  const roleAllowed = !allowedRoles || accepted.has(userSlug);
 
-    if (!accepted.has(userSlug)) {
-      return <Navigate to="/unauthorized" replace />;
-    }
+  // Check Access Matrix permission
+  const permAllowed = permission
+    ? hasPermission(permission.resource, permission.action)
+    : false;
+
+  if (roleAllowed || permAllowed) return children;
+
+  // Access denied — show RestrictedPage if permission context available, else redirect
+  if (permission) {
+    return <RestrictedPage resource={permission.resource} action={permission.action} />;
   }
 
-  return children;
+  return <Navigate to="/unauthorized" replace />;
 }
 
 export { ROLE_HOME };
