@@ -123,6 +123,7 @@ export default function AdminUserDetails() {
   const [user, setUser]           = useState(null);
   const [logs, setLogs]           = useState([]);
   const [leaves, setLeaves]       = useState(null);
+  const [projects, setProjects]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
 
@@ -135,12 +136,14 @@ export default function AdminUserDetails() {
     setLoading(true);
     setError('');
     try {
-      const [uRes, lRes] = await Promise.all([
+      const [uRes, lRes, pRes] = await Promise.all([
         adminAPI.getUser(id),
         adminAPI.getAuditLogs({ userId: id, limit: 20 }),
+        adminAPI.getUserProjects(id),
       ]);
       setUser(uRes.data.data);
       setLogs(lRes.data.data || []);
+      setProjects(pRes.data.data || []);
 
       // Non-blocking HR data
       hrAPI.getEmployeeLeaves(id)
@@ -564,31 +567,61 @@ export default function AdminUserDetails() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <div className="lg:col-span-2 space-y-5">
 
-              {/* Current Project */}
-              <SectionCard title="Current Project Assignment" icon="folder_open">
-                {user.project ? (
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-[#2563EB] text-[20px]">rocket_launch</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[15px] font-semibold text-[#0F172A]">
-                        {user.project.name || 'Unnamed Project'}
-                      </p>
-                      {user.project.status && (
-                        <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#DCFCE7] text-[#16A34A]">
-                          {user.project.status}
-                        </span>
-                      )}
-                      {user.project.description && (
-                        <p className="text-[13px] text-[#64748B] mt-1.5 leading-snug">{user.project.description}</p>
-                      )}
-                    </div>
+              {/* Projects */}
+              <SectionCard title={`Projects & Assignments (${projects.length})`} icon="folder_open">
+                {projects.length > 0 ? (
+                  <div className="space-y-3">
+                    {projects.map((proj) => {
+                      const statusColor =
+                        proj.status === 'Active'    ? 'bg-[#DCFCE7] text-[#16A34A]' :
+                        proj.status === 'Completed' ? 'bg-[#EFF6FF] text-[#2563EB]' :
+                        proj.status === 'On Hold'   ? 'bg-[#FEF3C7] text-[#D97706]' :
+                        proj.status === 'Cancelled' ? 'bg-[#FEE2E2] text-[#DC2626]' :
+                                                      'bg-[#F1F5F9] text-[#64748B]';
+                      const roleColor =
+                        proj.userRole === 'Manager'     ? 'bg-[#EDE9FE] text-[#7C3AED]' :
+                        proj.userRole === 'Intern'      ? 'bg-[#D1FAE5] text-[#059669]' :
+                                                          'bg-[#EFF6FF] text-[#2563EB]';
+                      return (
+                        <div key={proj._id} className="flex items-start gap-3.5 p-3.5 rounded-xl border border-[#E2E8F0] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] transition-colors">
+                          <div className="w-9 h-9 rounded-lg bg-[#EFF6FF] flex items-center justify-center shrink-0 mt-0.5">
+                            <span className="material-symbols-outlined text-[#2563EB] text-[18px]">rocket_launch</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <p className="text-[14px] font-semibold text-[#0F172A]">{proj.name}</p>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${roleColor}`}>{proj.userRole}</span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor}`}>{proj.status}</span>
+                              </div>
+                            </div>
+                            {proj.description && (
+                              <p className="text-[12px] text-[#64748B] mt-1 leading-snug line-clamp-2">{proj.description}</p>
+                            )}
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                              {proj.code && <span className="text-[11px] font-mono text-[#94A3B8]">{proj.code}</span>}
+                              {proj.priority && (
+                                <span className="text-[11px] text-[#64748B] flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[13px]">flag</span>{proj.priority}
+                                </span>
+                              )}
+                              {proj.startDate && (
+                                <span className="text-[11px] text-[#64748B] flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[13px]">calendar_today</span>
+                                  {new Date(proj.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                                  {proj.endDate && ` → ${new Date(proj.endDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-6">
                     <span className="material-symbols-outlined text-[36px] text-[#CBD5E1] block mb-2">folder_off</span>
-                    <p className="text-[13px] text-[#94A3B8]">No project currently assigned</p>
+                    <p className="text-[13px] text-[#94A3B8]">No projects found for this user</p>
                   </div>
                 )}
               </SectionCard>

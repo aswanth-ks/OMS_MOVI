@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
   getUsers, createUser, getUserById, updateUser,
-  deleteUser, updateUserStatus, resetUserPassword,
+  deleteUser, updateUserStatus, resetUserPassword, getUserProjects,
 } from '../../controllers/admin/users.controller.js';
 import { protect } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
@@ -20,6 +20,9 @@ router.post('/', requirePermission('Users', 'create'), auditLog('Create', 'Users
 
 // GET /api/admin/users/:id — Get single user details
 router.get('/:id', requirePermission('Users', 'read'), getUserById);
+
+// GET /api/admin/users/:id/projects — Get all projects a user is involved in
+router.get('/:id/projects', requirePermission('Users', 'read'), getUserProjects);
 
 // PUT /api/admin/users/:id — Update user
 router.put('/:id', requirePermission('Users', 'update'), auditLog('Update', 'Users'), updateUser);

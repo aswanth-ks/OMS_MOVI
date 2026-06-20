@@ -64,6 +64,7 @@ export const adminAPI = {
   // Users
   getUsers: (params) => api.get('/admin/users', { params }),
   getUser: (id) => api.get(`/admin/users/${id}`),
+  getUserProjects: (id) => api.get(`/admin/users/${id}/projects`),
   createUser: (data) => api.post('/admin/users', data),
   updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
   deleteUser: (id) => api.delete(`/admin/users/${id}`),

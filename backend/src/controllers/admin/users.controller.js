@@ -1,5 +1,6 @@
 import User from '../../models/User.js';
 import Role from '../../models/Role.js';
+import Project from '../../models/Project.js';
 import { sendSuccess, sendError, sendPaginated } from '../../utils/apiResponse.js';
 import { getPagination } from '../../utils/paginate.js';
 import { sendNotification } from '../../utils/sendNotification.js';
@@ -171,7 +172,8 @@ export const getUserById = async (req, res, next) => {
       .populate('manager', 'name employeeId designation')
       .populate('hrManager', 'name employeeId')
       .populate('mentor', 'name employeeId designation')
-      .populate('pmoLead', 'name employeeId designation');
+      .populate('pmoLead', 'name employeeId designation')
+      .populate('project', 'name status description startDate endDate');
 
     if (!user) {
       return sendError(res, 'User not found', 404);
@@ -332,6 +334,41 @@ export const resetUserPassword = async (req, res, next) => {
       name: user.name,
       tempPassword,
     }, 'Password reset successfully. Share this temporary password with the user.');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/admin/users/:id/projects
+ * All projects where the user is manager, team member, or intern.
+ */
+export const getUserProjects = async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const projects = await Project.find({
+      $or: [
+        { manager: userId },
+        { 'team.user': userId },
+        { 'interns.user': userId },
+      ],
+    })
+      .populate('manager', 'name designation')
+      .populate('department', 'name')
+      .select('name code status priority description startDate endDate healthStatus team interns manager department')
+      .sort({ createdAt: -1 });
+
+    const enriched = projects.map(p => {
+      const uid = userId.toString();
+      const role =
+        p.manager?._id?.toString() === uid ? 'Manager' :
+        p.team.some(t => t.user?.toString() === uid)
+          ? (p.team.find(t => t.user?.toString() === uid)?.role || 'Team Member')
+          : p.interns.some(i => i.user?.toString() === uid) ? 'Intern' : 'Member';
+      return { ...p.toObject(), userRole: role };
+    });
+
+    sendSuccess(res, enriched, 'Projects fetched');
   } catch (error) {
     next(error);
   }
