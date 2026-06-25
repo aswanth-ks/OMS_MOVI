@@ -744,9 +744,13 @@ function buildPdf(title, filters, result) {
           .rect(M, tableY, CW, ROW_H).strokeColor(C_BORD).lineWidth(0.2).stroke();
 
         cols.forEach((col, i) => {
-          const key = keys[i];
-          const raw = row[key];
-          const val = raw !== undefined && raw !== null && raw !== '' ? String(raw) : '—';
+          const key    = keys[i];
+          const raw    = row[key];
+          const full   = raw !== undefined && raw !== null && raw !== '' ? String(raw) : '—';
+
+          // Truncate long values to prevent pdfkit overflow
+          const maxChars = key === 'permissions' ? 60 : 80;
+          const val = full.length > maxChars ? full.slice(0, maxChars) + '…' : full;
 
           // Cell divider
           if (i > 0) {
