@@ -1,12 +1,14 @@
-import Report    from '../../models/Report.js';
-import ReportRun from '../../models/ReportRun.js';
-import User       from '../../models/User.js';
-import Department from '../../models/Department.js';
-import Role       from '../../models/Role.js';
-import AuditLog   from '../../models/AuditLog.js';
+import PDFDocument from 'pdfkit';
+import XLSX        from 'xlsx';
+import Report      from '../../models/Report.js';
+import ReportRun   from '../../models/ReportRun.js';
+import User        from '../../models/User.js';
+import Department  from '../../models/Department.js';
+import Role        from '../../models/Role.js';
+import AuditLog    from '../../models/AuditLog.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 
-// ─── Seed data (runs once on first GET) ──────────────────────────────────────
+// ─── Seed data ────────────────────────────────────────────────────────────────
 const SEED_REPORTS = [
   {
     name: 'User Activity Report',
@@ -108,9 +110,9 @@ export const listReports = async (req, res, next) => {
     if (category && category !== 'All') query.category = category;
     if (search) {
       query.$or = [
-        { name:        { $regex: search, $options: 'i' } },
-        { category:    { $regex: search, $options: 'i' } },
-        { dataSource:  { $elemMatch: { $regex: search, $options: 'i' } } },
+        { name:       { $regex: search, $options: 'i' } },
+        { category:   { $regex: search, $options: 'i' } },
+        { dataSource: { $elemMatch: { $regex: search, $options: 'i' } } },
       ];
     }
 
@@ -119,7 +121,6 @@ export const listReports = async (req, res, next) => {
       Report.countDocuments(query),
     ]);
 
-    // Attach run history to each report
     const enriched = await Promise.all(
       reports.map(async (r) => {
         const runs = await ReportRun.find({ report: r._id })
@@ -151,9 +152,9 @@ export const listReports = async (req, res, next) => {
       })
     );
 
-    // ── Stats ──
-    const now = new Date();
-    const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
+    // Stats
+    const now        = new Date();
+    const dayAgo     = new Date(now - 24 * 60 * 60 * 1000);
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd   = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
@@ -168,7 +169,6 @@ export const listReports = async (req, res, next) => {
       }),
     ]);
 
-    // Storage estimate from recent successful runs
     const recentRuns = await ReportRun.find({ status: 'SUCCESS' }).select('fileSize').lean();
     let totalBytes = 0;
     recentRuns.forEach(r => {
@@ -188,11 +188,11 @@ export const listReports = async (req, res, next) => {
     sendSuccess(res, {
       reports:    enriched,
       stats: {
-        total:           allCount,
+        total:          allCount,
         successLast24h,
-        failed:          failedLast24h,
-        scheduledToday:  scheduledTodayCount,
-        storageUsed:     totalBytes > 0 ? storageUsed : '0 KB',
+        failed:         failedLast24h,
+        scheduledToday: scheduledTodayCount,
+        storageUsed:    totalBytes > 0 ? storageUsed : '0 KB',
       },
       pagination: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) },
     });
@@ -213,15 +213,15 @@ export const triggerRun = async (req, res, next) => {
       startedAt: new Date(),
     });
 
-    // Async generation (simulated via setTimeout until job queue is added)
     setTimeout(async () => {
       const startMs = Date.now();
       try {
-        const result  = await generateReport(report.generatorKey, {});
+        const result     = await generateReport(report.generatorKey, {});
         const durationSec = Math.max(1, Math.round((Date.now() - startMs) / 1000));
-        const rows    = result.rows?.length ?? 0;
-        const csvBytes = Buffer.byteLength(buildCsv(report.name, {}, result), 'utf8');
-        const fileSize = csvBytes >= 1024 * 1024
+        const rows        = result.rows?.length ?? 0;
+        const csvText     = buildCsv(report.name, {}, result);
+        const csvBytes    = Buffer.byteLength(csvText, 'utf8');
+        const fileSize    = csvBytes >= 1024 * 1024
           ? `${(csvBytes / (1024 * 1024)).toFixed(1)} MB`
           : `${(csvBytes / 1024).toFixed(1)} KB`;
 
@@ -232,7 +232,6 @@ export const triggerRun = async (req, res, next) => {
           fileSize,
           duration:    `${durationSec}s`,
         });
-
         if (report.schedule !== 'Manual') {
           await Report.findByIdAndUpdate(report._id, { nextRun: calcNextRun(report.schedule) });
         }
@@ -258,21 +257,17 @@ export const triggerRun = async (req, res, next) => {
   }
 };
 
-// ─── GET /api/admin/reports/:id/runs/:runId/status ────────────────────────────
+// ─── GET /api/admin/reports/:id/runs/:runId/status ───────────────────────────
 export const getRunStatus = async (req, res, next) => {
   try {
-    const run = await ReportRun.findOne({
-      report: req.params.id,
-      runId:  req.params.runId,
-    });
+    const run = await ReportRun.findOne({ report: req.params.id, runId: req.params.runId });
     if (!run) return sendError(res, 'Run not found', 404);
-
     sendSuccess(res, {
-      runId:       run.runId,
-      status:      run.status,
-      recordCount: run.recordCount,
-      fileSize:    run.fileSize,
-      duration:    run.duration,
+      runId:        run.runId,
+      status:       run.status,
+      recordCount:  run.recordCount,
+      fileSize:     run.fileSize,
+      duration:     run.duration,
       errorMessage: run.errorMessage,
     });
   } catch (error) {
@@ -286,24 +281,31 @@ export const exportReport = async (req, res, next) => {
     const report = await Report.findById(req.params.id);
     if (!report) return sendError(res, 'Report not found', 404);
 
-    const format = (req.query.format || 'csv').toLowerCase();
-    const result = await generateReport(report.generatorKey, {});
-    const csv    = buildCsv(report.name, {}, result);
-
+    const format     = (req.query.format || 'csv').toLowerCase();
+    const filters    = {};  // full export — no filters
+    const result     = await generateReport(report.generatorKey, filters);
     const exportedAt = new Date().toISOString().slice(0, 10);
     const safeName   = report.name.replace(/[^a-z0-9]+/gi, '_');
-    const ext        = format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'csv';
-    const filename   = `OWMS_${safeName}_${exportedAt}.${ext}`;
 
-    const contentTypeMap = {
-      pdf:  'application/pdf',
-      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      csv:  'text/csv; charset=utf-8',
-    };
+    if (format === 'pdf') {
+      const pdfBuf = await buildPdf(report.name, filters, result);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="OWMS_${safeName}_${exportedAt}.pdf"`);
+      return res.status(200).send(pdfBuf);
+    }
 
-    res.setHeader('Content-Type', contentTypeMap[format] || 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.status(200).send('﻿' + csv); // BOM for Excel compatibility
+    if (format === 'xlsx') {
+      const xlsxBuf = buildXlsx(report.name, filters, result);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="OWMS_${safeName}_${exportedAt}.xlsx"`);
+      return res.status(200).send(xlsxBuf);
+    }
+
+    // CSV (default)
+    const csv = buildCsv(report.name, filters, result);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="OWMS_${safeName}_${exportedAt}.csv"`);
+    return res.status(200).send('﻿' + csv); // BOM for Excel
   } catch (error) {
     next(error);
   }
@@ -316,27 +318,19 @@ export const deleteReport = async (req, res, next) => {
     if (!report) return sendError(res, 'Report not found', 404);
     await ReportRun.deleteMany({ report: req.params.id });
     sendSuccess(res, { message: 'Report deleted' });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 // ─── PATCH /api/admin/reports/:id/archive ────────────────────────────────────
 export const archiveReport = async (req, res, next) => {
   try {
-    const report = await Report.findByIdAndUpdate(
-      req.params.id,
-      { isArchived: true },
-      { new: true }
-    );
+    const report = await Report.findByIdAndUpdate(req.params.id, { isArchived: true }, { new: true });
     if (!report) return sendError(res, 'Report not found', 404);
     sendSuccess(res, report);
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
-// ─── Core report generator ────────────────────────────────────────────────────
+// ─── Report generators ────────────────────────────────────────────────────────
 async function generateReport(generatorKey, filters) {
   switch (generatorKey) {
     case 'user-activity':        return runUserActivity(filters);
@@ -347,17 +341,16 @@ async function generateReport(generatorKey, filters) {
   }
 }
 
-// ── 1. User Activity ──────────────────────────────────────────────────────────
 async function runUserActivity(filters) {
   const { dateFrom, dateTo, department } = filters;
   const dateFilter = buildDateFilter(dateFrom, dateTo);
   const userFilter = { deletedAt: { $exists: false } };
   if (department) userFilter.department = department;
-  if (dateFilter) userFilter.createdAt = dateFilter;
+  if (dateFilter) userFilter.createdAt  = dateFilter;
 
   const [users, departments] = await Promise.all([
     User.find(userFilter)
-      .populate('role', 'name slug')
+      .populate('role',       'name slug')
       .populate('department', 'name')
       .sort({ createdAt: -1 })
       .lean(),
@@ -374,7 +367,6 @@ async function runUserActivity(filters) {
     byDept[d._id.toString()] = { department: d.name, total: 0, active: 0, inactive: 0 };
   });
   byDept['__none__'] = { department: 'No Department', total: 0, active: 0, inactive: 0 };
-
   users.forEach(u => {
     const key = u.department?._id?.toString() || '__none__';
     if (!byDept[key]) byDept[key] = { department: u.department?.name || 'Unknown', total: 0, active: 0, inactive: 0 };
@@ -384,26 +376,25 @@ async function runUserActivity(filters) {
   });
 
   const rows = users.map(u => ({
-    name:           u.name,
-    email:          u.email,
-    employeeId:     u.employeeId,
-    role:           u.role?.name || '—',
+    name:           u.name          || '—',
+    email:          u.email         || '—',
+    employeeId:     u.employeeId    || '—',
+    role:           u.role?.name    || '—',
     department:     u.department?.name || '—',
-    status:         u.status,
-    employmentType: u.employmentType,
-    joinDate:       u.joinDate ? new Date(u.joinDate).toLocaleDateString('en-US') : '—',
+    status:         u.status        || '—',
+    employmentType: u.employmentType || '—',
+    joinDate:       u.joinDate  ? new Date(u.joinDate).toLocaleDateString('en-US')  : '—',
     createdAt:      u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US') : '—',
   }));
 
   return {
-    summary: { total, active, inactive, suspended },
-    groupedByDepartment: Object.values(byDept).filter(d => d.total > 0),
+    summary:    { total, active, inactive, suspended },
     rows,
-    columns: ['Name', 'Email', 'Employee ID', 'Role', 'Department', 'Status', 'Employment Type', 'Join Date', 'Created At'],
+    columns:    ['Name', 'Email', 'Employee ID', 'Role', 'Department', 'Status', 'Employment Type', 'Join Date', 'Created At'],
+    columnKeys: ['name', 'email', 'employeeId', 'role', 'department', 'status', 'employmentType', 'joinDate', 'createdAt'],
   };
 }
 
-// ── 2. Department Summary ─────────────────────────────────────────────────────
 async function runDepartmentSummary(filters) {
   const { department } = filters;
   const deptFilter = department ? { _id: department } : {};
@@ -412,17 +403,17 @@ async function runDepartmentSummary(filters) {
   const rows = await Promise.all(departments.map(async (dept) => {
     const [total, active, inactive] = await Promise.all([
       User.countDocuments({ department: dept._id, deletedAt: { $exists: false } }),
-      User.countDocuments({ department: dept._id, status: 'Active', deletedAt: { $exists: false } }),
+      User.countDocuments({ department: dept._id, status: 'Active',   deletedAt: { $exists: false } }),
       User.countDocuments({ department: dept._id, status: 'Inactive', deletedAt: { $exists: false } }),
     ]);
     return {
       department:  dept.name,
-      code:        dept.code || '—',
+      code:        dept.code   || '—',
       status:      dept.status || 'Active',
       headcount:   total,
       active,
       inactive,
-      activeRatio: total > 0 ? Math.round((active / total) * 100) + '%' : '0%',
+      activeRatio: total > 0 ? `${Math.round((active / total) * 100)}%` : '0%',
     };
   }));
 
@@ -430,28 +421,30 @@ async function runDepartmentSummary(filters) {
   const totalActive    = rows.reduce((s, r) => s + r.active, 0);
 
   return {
-    summary: { totalDepartments: rows.length, totalHeadcount, totalActive, totalInactive: totalHeadcount - totalActive },
+    summary:    { totalDepartments: rows.length, totalHeadcount, totalActive, totalInactive: totalHeadcount - totalActive },
     rows,
-    columns: ['Department', 'Code', 'Status', 'Headcount', 'Active', 'Inactive', 'Active Ratio'],
+    columns:    ['Department', 'Code', 'Status', 'Headcount', 'Active', 'Inactive', 'Active Ratio'],
+    columnKeys: ['department', 'code', 'status', 'headcount', 'active', 'inactive', 'activeRatio'],
   };
 }
 
-// ── 3. Role & Permission Audit ────────────────────────────────────────────────
 async function runRolePermissionAudit(filters) {
   const { role } = filters;
   const roleFilter = role ? { _id: role } : {};
-  const roles = await Role.find(roleFilter).populate('permissions', 'name resource action status').lean();
+  const roles = await Role.find(roleFilter)
+    .populate('permissions', 'name resource action status')
+    .lean();
 
   const rows = await Promise.all(roles.map(async (r) => {
     const userCount = await User.countDocuments({ role: r._id, deletedAt: { $exists: false } });
-    const perms = (r.permissions || []).filter(p => p.status === 'Active');
+    const perms     = (r.permissions || []).filter(p => p.status === 'Active');
     return {
       role:            r.name,
       slug:            r.slug,
       status:          r.status,
       userCount,
       permissionCount: perms.length,
-      permissions:     perms.map(p => `${p.resource}:${p.action}`).join(', '),
+      permissions:     perms.map(p => `${p.resource}:${p.action}`).join(', ') || '—',
     };
   }));
 
@@ -459,13 +452,13 @@ async function runRolePermissionAudit(filters) {
   const totalPerms = rows.reduce((s, r) => s + r.permissionCount, 0);
 
   return {
-    summary: { totalRoles: rows.length, totalUsers, totalPermissions: totalPerms },
+    summary:    { totalRoles: rows.length, totalUsers, totalPermissions: totalPerms },
     rows,
-    columns: ['Role', 'Slug', 'Status', 'Users Assigned', 'Active Permissions', 'Permissions'],
+    columns:    ['Role', 'Slug', 'Status', 'Users Assigned', 'Active Permissions', 'Permissions'],
+    columnKeys: ['role', 'slug', 'status', 'userCount', 'permissionCount', 'permissions'],
   };
 }
 
-// ── 4. Login Activity ─────────────────────────────────────────────────────────
 async function runLoginActivity(filters) {
   const { dateFrom, dateTo } = filters;
   const dateFilter = buildDateFilter(dateFrom, dateTo);
@@ -473,7 +466,11 @@ async function runLoginActivity(filters) {
   if (dateFilter) logFilter.createdAt = dateFilter;
 
   const logs = await AuditLog.find(logFilter)
-    .populate({ path: 'user', select: 'name email employeeId', populate: { path: 'role', select: 'name' } })
+    .populate({
+      path: 'user',
+      select: 'name email employeeId',
+      populate: { path: 'role', select: 'name' },
+    })
     .sort({ createdAt: -1 })
     .limit(5000)
     .lean();
@@ -485,44 +482,326 @@ async function runLoginActivity(filters) {
 
   const rows = logs.map(l => ({
     timestamp:  l.createdAt ? new Date(l.createdAt).toLocaleString('en-US') : '—',
-    user:       l.user?.name || l.userName || 'Unknown',
-    email:      l.user?.email || '—',
+    user:       l.user?.name     || l.userName || 'Unknown',
+    email:      l.user?.email    || '—',
     role:       l.user?.role?.name || '—',
-    action:     l.action,
-    result:     l.result,
-    ipAddress:  l.ipAddress || '—',
-    device:     l.device || '—',
+    action:     l.action         || '—',
+    result:     l.result         || '—',
+    ipAddress:  l.ipAddress      || '—',
+    device:     l.device         || '—',
   }));
 
   return {
-    summary: { totalEvents: logs.length, totalLogins, successLogins, failedLogins, lockedAccounts: lockedCount },
+    summary:    { totalEvents: logs.length, totalLogins, successLogins, failedLogins, lockedAccounts: lockedCount },
     rows,
-    columns: ['Timestamp', 'User', 'Email', 'Role', 'Action', 'Result', 'IP Address', 'Device'],
+    columns:    ['Timestamp', 'User', 'Email', 'Role', 'Action', 'Result', 'IP Address', 'Device'],
+    columnKeys: ['timestamp', 'user', 'email', 'role', 'action', 'result', 'ipAddress', 'device'],
   };
 }
 
 // ─── CSV builder ──────────────────────────────────────────────────────────────
 function buildCsv(title, filters, result) {
-  const escape = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+  const esc  = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const keys = result.columnKeys || result.columns;
 
-  const metaLines = [
+  const lines = [
+    `"OWMS — Movi Cloud Labs"`,
     `"Report:","${title}"`,
-    `"Generated At:","${new Date().toLocaleString('en-US')}"`,
+    `"Generated:","${new Date().toLocaleString('en-US')}"`,
+    `"Total Records:","${result.rows?.length ?? 0}"`,
   ];
-  if (filters.dateFrom) metaLines.push(`"From:","${filters.dateFrom}"`);
-  if (filters.dateTo)   metaLines.push(`"To:","${filters.dateTo}"`);
-  metaLines.push('');
 
-  const header   = result.columns.map(escape).join(',');
-  const dataRows = result.rows.map(row =>
-    result.columns.map(col => {
-      const key = col.toLowerCase().replace(/[^a-z]/g, '');
-      const val = Object.entries(row).find(([k]) => k.toLowerCase().replace(/[^a-z]/g, '') === key)?.[1];
-      return escape(val ?? '');
-    }).join(',')
-  );
+  if (filters.dateFrom) lines.push(`"Date From:","${filters.dateFrom}"`);
+  if (filters.dateTo)   lines.push(`"Date To:","${filters.dateTo}"`);
 
-  return [...metaLines, header, ...dataRows].join('\n');
+  if (result.summary && Object.keys(result.summary).length > 0) {
+    lines.push('');
+    lines.push('"— Summary —"');
+    Object.entries(result.summary).forEach(([k, v]) => {
+      const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+      lines.push(`${esc(label)},${esc(v)}`);
+    });
+  }
+
+  lines.push('');
+  lines.push('"— Data —"');
+  lines.push(result.columns.map(esc).join(','));
+  (result.rows || []).forEach(row => {
+    lines.push(keys.map(k => esc(row[k] ?? '')).join(','));
+  });
+
+  return lines.join('\n');
+}
+
+// ─── XLSX builder ─────────────────────────────────────────────────────────────
+function buildXlsx(title, filters, result) {
+  const wb = XLSX.utils.book_new();
+
+  // ── Summary sheet ──
+  const summaryAoa = [
+    ['OWMS — Movi Cloud Labs', ''],
+    ['Report', title],
+    ['Generated', new Date().toLocaleString('en-US')],
+    ['Total Records', result.rows?.length ?? 0],
+  ];
+  if (filters.dateFrom) summaryAoa.push(['Date From', filters.dateFrom]);
+  if (filters.dateTo)   summaryAoa.push(['Date To',   filters.dateTo]);
+  if (result.summary) {
+    summaryAoa.push(['', '']);
+    summaryAoa.push(['Summary Metrics', '']);
+    Object.entries(result.summary).forEach(([k, v]) => {
+      const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+      summaryAoa.push([label, v]);
+    });
+  }
+  const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
+  summaryWs['!cols'] = [{ wch: 28 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+  // ── Data sheet ──
+  const keys   = result.columnKeys || result.columns;
+  const header = result.columns;
+  const dataAoa = [header];
+  (result.rows || []).forEach(row => {
+    dataAoa.push(keys.map(k => {
+      const v = row[k];
+      // Return numbers as numbers for Excel
+      if (typeof v === 'number') return v;
+      return v ?? '';
+    }));
+  });
+
+  const dataWs = XLSX.utils.aoa_to_sheet(dataAoa);
+
+  // Auto column widths (based on header length, min 12, max 40)
+  dataWs['!cols'] = header.map(h => ({ wch: Math.min(40, Math.max(12, h.length + 6)) }));
+
+  // Freeze top row (header)
+  dataWs['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  XLSX.utils.book_append_sheet(wb, dataWs, 'Data');
+
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+// ─── PDF builder ──────────────────────────────────────────────────────────────
+function buildPdf(title, filters, result) {
+  return new Promise((resolve, reject) => {
+    const colCount    = result.columns?.length || 0;
+    const orientation = colCount > 6 ? 'landscape' : 'portrait';
+
+    const doc = new PDFDocument({
+      margin: 45,
+      size:   'A4',
+      layout: orientation,
+      bufferPages: true,
+      info: {
+        Title:   title,
+        Author:  'OWMS — Movi Cloud Labs',
+        Creator: 'OWMS Reporting Engine v2',
+        Subject: 'Administrative Report',
+      },
+    });
+
+    const chunks = [];
+    doc.on('data',  c  => chunks.push(c));
+    doc.on('error', reject);
+
+    const PW   = doc.page.width;
+    const PH   = doc.page.height;
+    const M    = 45;
+    const CW   = PW - M * 2;
+
+    // Design tokens
+    const C_BLUE  = '#2563EB';
+    const C_DARK  = '#0F172A';
+    const C_GRAY  = '#64748B';
+    const C_LGRAY = '#F8FAFC';
+    const C_BORD  = '#E2E8F0';
+    const C_GREEN = '#16A34A';
+    const C_RED   = '#DC2626';
+    const C_AMBER = '#D97706';
+
+    // ── Page header (reused on each page) ──
+    const drawPageHeader = () => {
+      doc.rect(0, 0, PW, 50).fill(C_BLUE);
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(13)
+        .text('OWMS', M, 14, { continued: true })
+        .font('Helvetica').fillColor('#BFDBFE').fontSize(10)
+        .text('  ·  Movi Cloud Labs');
+      doc.fillColor('#93C5FD').font('Helvetica').fontSize(7.5)
+        .text('Confidential · Administrative Report', M, 33);
+      const dt = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      doc.fillColor('white').font('Helvetica').fontSize(7.5)
+        .text(dt, M, 33, { width: CW, align: 'right' });
+    };
+
+    drawPageHeader();
+    doc.y = 68;
+
+    // ── Title block ──
+    doc.fillColor(C_DARK).font('Helvetica-Bold').fontSize(18).text(title, M);
+    doc.moveDown(0.25);
+    const genStr = `Generated on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}   ·   ${result.rows?.length ?? 0} records`;
+    doc.fillColor(C_GRAY).font('Helvetica').fontSize(8.5).text(genStr, M);
+
+    if (filters.dateFrom || filters.dateTo) {
+      const fp = [];
+      if (filters.dateFrom) fp.push(`From: ${filters.dateFrom}`);
+      if (filters.dateTo)   fp.push(`To:   ${filters.dateTo}`);
+      doc.moveDown(0.15).text(`Filters applied: ${fp.join('   ·   ')}`, M);
+    }
+
+    doc.moveDown(0.8);
+    doc.moveTo(M, doc.y).lineTo(PW - M, doc.y).strokeColor(C_BORD).lineWidth(0.75).stroke();
+    doc.moveDown(0.8);
+
+    // ── Summary stat boxes ──
+    if (result.summary && Object.keys(result.summary).length > 0) {
+      const entries = Object.entries(result.summary);
+      const count   = entries.length;
+      const gap     = 8;
+      const boxW    = (CW - gap * (count - 1)) / count;
+      const boxH    = 50;
+      const startY  = doc.y;
+
+      entries.forEach(([key, val], i) => {
+        const x = M + i * (boxW + gap);
+        // Box fill + border
+        doc.rect(x, startY, boxW, boxH).fill('#EFF6FF');
+        doc.rect(x, startY, boxW, boxH).strokeColor(C_BORD).lineWidth(0.5).stroke();
+        // Top accent line
+        doc.rect(x, startY, boxW, 3).fill(C_BLUE);
+        // Value
+        doc.fillColor(C_BLUE).font('Helvetica-Bold').fontSize(17)
+          .text(String(val), x, startY + 9, { width: boxW, align: 'center' });
+        // Label
+        const lbl = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+        doc.fillColor(C_GRAY).font('Helvetica').fontSize(7)
+          .text(lbl, x, startY + 31, { width: boxW, align: 'center' });
+      });
+
+      doc.y = startY + boxH + 14;
+      doc.moveTo(M, doc.y).lineTo(PW - M, doc.y).strokeColor(C_BORD).lineWidth(0.75).stroke();
+      doc.moveDown(0.8);
+    }
+
+    // ── Data table ──
+    const cols    = result.columns || [];
+    const keys    = result.columnKeys || cols;
+    const rows    = result.rows || [];
+    const HDR_H   = 20;
+    const ROW_H   = 15;
+    const FONT_SZ = 7.2;
+
+    if (cols.length === 0 || rows.length === 0) {
+      doc.fillColor(C_GRAY).font('Helvetica').fontSize(11).text('No data to display.', { align: 'center' });
+    } else {
+      // Proportional column widths
+      const weights = keys.map(k => {
+        if (k === 'permissions' || k === 'email') return 3.0;
+        if (k === 'name' || k === 'user')         return 2.0;
+        if (k === 'timestamp')                     return 2.2;
+        if (k === 'ipAddress' || k === 'device')   return 1.6;
+        if (k === 'description')                   return 2.5;
+        return 1.0;
+      });
+      const weightTotal = weights.reduce((a, b) => a + b, 0);
+      const colWidths   = weights.map(w => (w / weightTotal) * CW);
+
+      const drawHeader = (ty) => {
+        let cx = M;
+        // Header background bar
+        doc.rect(M, ty, CW, HDR_H).fill(C_BLUE);
+        cols.forEach((col, i) => {
+          doc.fillColor('white').font('Helvetica-Bold').fontSize(FONT_SZ - 0.5)
+            .text(col.toUpperCase(), cx + 5, ty + 6, {
+              width:     colWidths[i] - 10,
+              lineBreak: false,
+              ellipsis:  true,
+            });
+          cx += colWidths[i];
+        });
+        return ty + HDR_H;
+      };
+
+      let tableY = doc.y;
+      tableY = drawHeader(tableY);
+
+      rows.slice(0, 2000).forEach((row, ri) => {
+        if (tableY + ROW_H > PH - 50) {
+          doc.addPage();
+          drawPageHeader();
+          tableY = 60;
+          tableY = drawHeader(tableY);
+        }
+
+        const bg = ri % 2 === 0 ? 'white' : C_LGRAY;
+        let cx = M;
+
+        // Draw full row background
+        doc.rect(M, tableY, CW, ROW_H).fill(bg)
+          .rect(M, tableY, CW, ROW_H).strokeColor(C_BORD).lineWidth(0.2).stroke();
+
+        cols.forEach((col, i) => {
+          const key = keys[i];
+          const raw = row[key];
+          const val = raw !== undefined && raw !== null && raw !== '' ? String(raw) : '—';
+
+          // Cell divider
+          if (i > 0) {
+            doc.moveTo(cx, tableY).lineTo(cx, tableY + ROW_H).strokeColor(C_BORD).lineWidth(0.2).stroke();
+          }
+
+          // Value color
+          let textColor = C_DARK;
+          let bold      = false;
+          if (key === 'status' || key === 'result') {
+            if (['Active', 'SUCCESS'].includes(val))                       { textColor = C_GREEN; bold = true; }
+            else if (['Inactive', 'Terminated', 'FAILED'].includes(val))   { textColor = C_RED;   bold = true; }
+            else if (['On Leave', 'Suspended', 'Pending'].includes(val))   { textColor = C_AMBER; bold = true; }
+          }
+
+          doc.fillColor(textColor)
+            .font(bold ? 'Helvetica-Bold' : 'Helvetica')
+            .fontSize(FONT_SZ)
+            .text(val, cx + 4, tableY + 4, {
+              width:     colWidths[i] - 8,
+              lineBreak: false,
+              ellipsis:  true,
+            });
+          cx += colWidths[i];
+        });
+        tableY += ROW_H;
+      });
+
+      if (rows.length > 2000) {
+        doc.y = tableY + 4;
+        doc.fillColor(C_GRAY).font('Helvetica').fontSize(7.5)
+          .text(`... and ${rows.length - 2000} additional records (page limit reached)`);
+      }
+    }
+
+    // ── Footers on all pages ──
+    const range = doc.bufferedPageRange();
+    for (let p = 0; p < range.count; p++) {
+      doc.switchToPage(p);
+      doc.moveTo(M, PH - 32).lineTo(PW - M, PH - 32).strokeColor(C_BORD).lineWidth(0.5).stroke();
+      doc.fillColor(C_GRAY).font('Helvetica').fontSize(6.5)
+        .text(
+          `${title}  ·  Movi Cloud Labs  ·  Confidential`,
+          M, PH - 24, { width: CW * 0.6, lineBreak: false }
+        )
+        .text(
+          `Page ${p + 1} of ${range.count}`,
+          M, PH - 24, { width: CW, align: 'right', lineBreak: false }
+        );
+    }
+
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.flushPages();
+    doc.end();
+  });
 }
 
 // ─── Util ─────────────────────────────────────────────────────────────────────
