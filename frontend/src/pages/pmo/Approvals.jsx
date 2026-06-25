@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
 import toast from 'react-hot-toast';
 import { pmoAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function PMOApprovals() {
+  const { hasPermission } = useAuth();
+  const canUpdateTask   = hasPermission('Tasks', 'update');
+  const canApproveLeave = hasPermission('Leave', 'approve');
   const [activeTab, setActiveTab] = useState('Tasks'); // 'Tasks' or 'Leave'
   const [taskApprovals, setTaskApprovals] = useState([]);
   const [leaveApprovals, setLeaveApprovals] = useState([]);
@@ -174,10 +178,20 @@ export default function PMOApprovals() {
                     </div>
 
                     <div className="bg-[#F8FAFC] border-t sm:border-t-0 sm:border-l border-[#E2E8F0] p-6 sm:w-[240px] flex flex-row sm:flex-col items-center justify-center gap-3 shrink-0">
-                      <button onClick={() => handleTaskAction(approval._id, 'approve')} className="w-full py-2.5 bg-[#10B981] text-white rounded-xl text-[13px] font-bold hover:bg-[#059669] transition-colors shadow-sm flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => canUpdateTask && handleTaskAction(approval._id, 'approve')}
+                        disabled={!canUpdateTask}
+                        title={!canUpdateTask ? 'You do not have permission to approve tasks. Contact your administrator.' : ''}
+                        className={`w-full py-2.5 rounded-xl text-[13px] font-bold transition-colors shadow-sm flex items-center justify-center gap-2 ${canUpdateTask ? 'bg-[#10B981] text-white hover:bg-[#059669]' : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'}`}
+                      >
                         <span className="material-symbols-outlined text-[18px]">done_all</span> Approve Task
                       </button>
-                      <button onClick={() => handleTaskAction(approval._id, 'reject')} className="w-full py-2.5 bg-white border border-[#F59E0B] text-[#D97706] rounded-xl text-[13px] font-bold hover:bg-[#FFFBEB] transition-colors shadow-sm flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => canUpdateTask && handleTaskAction(approval._id, 'reject')}
+                        disabled={!canUpdateTask}
+                        title={!canUpdateTask ? 'You do not have permission to request changes. Contact your administrator.' : ''}
+                        className={`w-full py-2.5 bg-white rounded-xl text-[13px] font-bold transition-colors shadow-sm flex items-center justify-center gap-2 ${canUpdateTask ? 'border border-[#F59E0B] text-[#D97706] hover:bg-[#FFFBEB]' : 'border border-[#E2E8F0] text-[#CBD5E1] cursor-not-allowed'}`}
+                      >
                         <span className="material-symbols-outlined text-[18px]">history</span> Request Changes
                       </button>
                     </div>
@@ -237,10 +251,20 @@ export default function PMOApprovals() {
                     </div>
 
                     <div className="bg-[#F8FAFC] border-t sm:border-t-0 sm:border-l border-[#E2E8F0] p-6 sm:w-[240px] flex flex-row sm:flex-col items-center justify-center gap-3 shrink-0">
-                      <button onClick={() => handleLeaveAction(approval._id, 'approve')} className="w-full py-2.5 bg-[#10B981] text-white rounded-xl text-[13px] font-bold hover:bg-[#059669] transition-colors shadow-sm flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => canApproveLeave && handleLeaveAction(approval._id, 'approve')}
+                        disabled={!canApproveLeave}
+                        title={!canApproveLeave ? 'You do not have permission to approve leave. Contact your administrator.' : ''}
+                        className={`w-full py-2.5 rounded-xl text-[13px] font-bold transition-colors shadow-sm flex items-center justify-center gap-2 ${canApproveLeave ? 'bg-[#10B981] text-white hover:bg-[#059669]' : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'}`}
+                      >
                         <span className="material-symbols-outlined text-[18px]">thumb_up</span> Approve Leave
                       </button>
-                      <button onClick={() => handleLeaveAction(approval._id, 'reject')} className="w-full py-2.5 bg-white border border-[#EF4444] text-[#DC2626] rounded-xl text-[13px] font-bold hover:bg-[#FEF2F2] transition-colors shadow-sm flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => canApproveLeave && handleLeaveAction(approval._id, 'reject')}
+                        disabled={!canApproveLeave}
+                        title={!canApproveLeave ? 'You do not have permission to deny leave. Contact your administrator.' : ''}
+                        className={`w-full py-2.5 bg-white rounded-xl text-[13px] font-bold transition-colors shadow-sm flex items-center justify-center gap-2 ${canApproveLeave ? 'border border-[#EF4444] text-[#DC2626] hover:bg-[#FEF2F2]' : 'border border-[#E2E8F0] text-[#CBD5E1] cursor-not-allowed'}`}
+                      >
                         <span className="material-symbols-outlined text-[18px]">thumb_down</span> Deny Request
                       </button>
                     </div>

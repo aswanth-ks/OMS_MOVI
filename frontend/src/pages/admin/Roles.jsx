@@ -4,10 +4,16 @@ import { Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageWrapper from '../../components/PageWrapper';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import AccessDenied from '../../components/shared/AccessDenied';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminRoles() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canRead   = hasPermission('Roles', 'read');
+  const canCreate = hasPermission('Roles', 'create');
+  const canDelete = hasPermission('Roles', 'delete');
   const [selectedIds, setSelectedIds] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,23 +59,27 @@ export default function AdminRoles() {
     }
   };
 
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view roles." /></PageWrapper>;
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-6">
-        
+
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-[24px] font-semibold tracking-tight text-[#0F172A]">Roles</h1>
             <p className="text-[14px] text-[#64748B] mt-1">Manage system access profiles and define standard operational roles.</p>
           </div>
-          <button 
-            onClick={() => navigate('/admin/roles/new')}
-            className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Create Role
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => navigate('/admin/roles/new')}
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Create Role
+            </button>
+          )}
         </div>
 
         {/* Toolbar */}
@@ -159,9 +169,10 @@ export default function AdminRoles() {
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: role._id, name: role.name }); }}
-                            className="text-[#64748B] hover:text-[#DC2626] transition-colors"
-                            title="Delete role"
+                            onClick={(e) => { e.stopPropagation(); if (canDelete) setDeleteTarget({ id: role._id, name: role.name }); }}
+                            disabled={!canDelete}
+                            title={canDelete ? 'Delete role' : 'You do not have permission to delete roles. Contact your administrator.'}
+                            className={`transition-colors ${canDelete ? 'text-[#64748B] hover:text-[#DC2626]' : 'text-[#CBD5E1] cursor-not-allowed'}`}
                           >
                             <Trash2 size={16} />
                           </button>

@@ -100,6 +100,13 @@ export const adminAPI = {
   getAuditLogs: (params) => api.get('/admin/audit-logs', { params }),
 
   // Reports
+  getReports: (params) => api.get('/admin/reports', { params }),
+  triggerRun: (id) => api.post(`/admin/reports/${id}/run`),
+  getRunStatus: (id, runId) => api.get(`/admin/reports/${id}/runs/${runId}/status`),
+  exportReportFile: (id, format) => api.get(`/admin/reports/${id}/export`, { params: { format }, responseType: 'blob' }),
+  deleteReport: (id) => api.delete(`/admin/reports/${id}`),
+  archiveReport: (id) => api.patch(`/admin/reports/${id}/archive`),
+  // legacy aliases kept for backward compat
   getReportTypes: () => api.get('/admin/reports'),
   runReport: (type, filters) => api.post('/admin/reports/run', { type, filters }),
   exportReport: (type, filters) => api.get(`/admin/reports/${type}/export`, { params: filters, responseType: 'blob' }),

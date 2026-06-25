@@ -8,11 +8,15 @@ import {
   Calendar as CalendarIcon, TrendingUp
 } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
+import AccessDenied from '../../components/shared/AccessDenied';
 import { hrAPI, notificationAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function HRDashboard() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canApproveLeave = hasPermission('Leave', 'approve');
   const [loading, setLoading] = useState(true);
   const [headcount, setHeadcount] = useState(null);
   const [attendanceSummary, setAttendanceSummary] = useState(null);
@@ -314,17 +318,19 @@ export default function HRDashboard() {
                           </div>
                           
                           <div className="flex items-center gap-1.5 shrink-0 ml-4">
-                            <button 
-                              onClick={() => handleLeaveAction(leave._id, 'Approved')}
-                              className="w-8 h-8 rounded flex items-center justify-center text-[#16A34A] border border-[#E2E8F0] hover:bg-[#DCFCE7] hover:border-[#16A34A] transition-colors"
-                              title="Approve"
+                            <button
+                              onClick={() => canApproveLeave && handleLeaveAction(leave._id, 'Approved')}
+                              disabled={!canApproveLeave}
+                              title={canApproveLeave ? 'Approve' : 'You do not have permission to approve leave. Contact your administrator.'}
+                              className={`w-8 h-8 rounded flex items-center justify-center border transition-colors ${canApproveLeave ? 'text-[#16A34A] border-[#E2E8F0] hover:bg-[#DCFCE7] hover:border-[#16A34A]' : 'text-[#CBD5E1] border-[#E2E8F0] cursor-not-allowed'}`}
                             >
                               <Check size={14} strokeWidth={2.5} />
                             </button>
-                            <button 
-                              onClick={() => handleLeaveAction(leave._id, 'Rejected')}
-                              className="w-8 h-8 rounded flex items-center justify-center text-[#DC2626] border border-[#E2E8F0] hover:bg-[#FEF2F2] hover:border-[#DC2626] transition-colors"
-                              title="Reject"
+                            <button
+                              onClick={() => canApproveLeave && handleLeaveAction(leave._id, 'Rejected')}
+                              disabled={!canApproveLeave}
+                              title={canApproveLeave ? 'Reject' : 'You do not have permission to reject leave. Contact your administrator.'}
+                              className={`w-8 h-8 rounded flex items-center justify-center border transition-colors ${canApproveLeave ? 'text-[#DC2626] border-[#E2E8F0] hover:bg-[#FEF2F2] hover:border-[#DC2626]' : 'text-[#CBD5E1] border-[#E2E8F0] cursor-not-allowed'}`}
                             >
                               <X size={14} strokeWidth={2.5} />
                             </button>

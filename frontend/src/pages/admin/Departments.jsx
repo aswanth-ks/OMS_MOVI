@@ -4,10 +4,17 @@ import { Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageWrapper from '../../components/PageWrapper';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import AccessDenied from '../../components/shared/AccessDenied';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminDepartments() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canRead   = hasPermission('Departments', 'read');
+  const canCreate = hasPermission('Departments', 'create');
+  const canUpdate = hasPermission('Departments', 'update');
+  const canDelete = hasPermission('Departments', 'delete');
   const [selectedIds, setSelectedIds] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +58,8 @@ export default function AdminDepartments() {
     await fetchDepartments();
   };
 
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view departments." /></PageWrapper>;
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-6">
@@ -61,13 +70,15 @@ export default function AdminDepartments() {
             <h1 className="text-[24px] font-semibold tracking-tight text-[#0F172A]">Departments</h1>
             <p className="text-[14px] text-[#64748B] mt-1">Manage organizational structure and departmental configurations.</p>
           </div>
-          <button 
-            onClick={() => navigate('/admin/departments/new')}
-            className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Create Department
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => navigate('/admin/departments/new')}
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Create Department
+            </button>
+          )}
         </div>
 
         {/* Toolbar */}
@@ -171,13 +182,19 @@ export default function AdminDepartments() {
                           <button onClick={() => navigate(`/admin/departments/${dept._id}`)} className="text-[#64748B] hover:text-[#2563EB] transition-colors" title="View Details">
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                           </button>
-                          <button onClick={() => navigate(`/admin/departments/${dept._id}/edit`)} className="text-[#64748B] hover:text-[#2563EB] transition-colors" title="Edit">
+                          <button
+                            onClick={() => canUpdate && navigate(`/admin/departments/${dept._id}/edit`)}
+                            disabled={!canUpdate}
+                            title={canUpdate ? 'Edit' : 'You do not have permission to edit departments. Contact your administrator.'}
+                            className={`transition-colors ${canUpdate ? 'text-[#64748B] hover:text-[#2563EB]' : 'text-[#CBD5E1] cursor-not-allowed'}`}
+                          >
                             <span className="material-symbols-outlined text-[18px]">edit</span>
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: dept._id, name: dept.name }); }}
-                            className="text-[#64748B] hover:text-[#DC2626] transition-colors"
-                            title="Delete department"
+                            onClick={(e) => { e.stopPropagation(); if (canDelete) setDeleteTarget({ id: dept._id, name: dept.name }); }}
+                            disabled={!canDelete}
+                            title={canDelete ? 'Delete department' : 'You do not have permission to delete departments. Contact your administrator.'}
+                            className={`transition-colors ${canDelete ? 'text-[#64748B] hover:text-[#DC2626]' : 'text-[#CBD5E1] cursor-not-allowed'}`}
                           >
                             <Trash2 size={16} />
                           </button>

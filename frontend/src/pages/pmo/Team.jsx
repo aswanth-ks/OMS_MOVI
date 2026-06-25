@@ -4,10 +4,15 @@ import { Search, Filter, LayoutGrid, List as ListIcon, UserPlus, X, ChevronDown 
 import PageWrapper from '../../components/PageWrapper';
 import { WorkloadBar } from '../../components/pmo/WorkloadBar';
 import { pmoAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/shared/AccessDenied';
 import toast from 'react-hot-toast';
 
 export default function PMOTeam() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canRead = hasPermission('Users', 'read');
+  const canViewProfile = canRead;
   const [viewMode, setViewMode] = useState('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [teamData, setTeamData] = useState([]);
@@ -110,6 +115,8 @@ export default function PMOTeam() {
 
     return matchesSearch && matchesDept && matchesWorkload;
   });
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view the team." /></PageWrapper>;
 
   return (
     <PageWrapper>
@@ -273,7 +280,18 @@ export default function PMOTeam() {
                 </div>
 
                 <div className="flex gap-2">
-                  <button onClick={() => navigate(`/hr/employees/${member.id}`)} className="flex-1 py-2 bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F1F5F9] transition-colors">View Profile</button>
+                  <button
+                    onClick={() => navigate(`/admin/users/${member.id}`)}
+                    className={`flex-1 py-2 border text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                      canViewProfile
+                        ? 'bg-[#F8FAFC] border-[#E2E8F0] text-[#0F172A] hover:bg-[#F1F5F9]'
+                        : 'bg-[#FEF2F2] border-[#FCA5A5] text-[#DC2626] cursor-not-allowed opacity-60'
+                    }`}
+                    title={canViewProfile ? 'View full profile' : 'Users.read permission required'}
+                  >
+                    {!canViewProfile && <span className="material-symbols-outlined text-[12px]">lock</span>}
+                    View Profile
+                  </button>
                   <button onClick={() => navigate('/pmo/tasks')} className="flex-1 py-2 bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F1F5F9] transition-colors">Assign Task</button>
                 </div>
               </div>
@@ -315,7 +333,14 @@ export default function PMOTeam() {
                       <WorkloadBar percentage={member.workload} size="sm" />
                     </td>
                     <td className="px-6 py-4">
-                      <button onClick={() => navigate(`/hr/employees/${member.id}`)} className="text-[#2563EB] font-bold text-xs hover:underline mr-3">Profile</button>
+                      <button
+                        onClick={() => navigate(`/admin/users/${member.id}`)}
+                        className={`font-bold text-xs mr-3 flex items-center gap-1 ${canViewProfile ? 'text-[#2563EB] hover:underline' : 'text-[#94A3B8] cursor-not-allowed'}`}
+                        title={canViewProfile ? 'View profile' : 'Users.read permission required'}
+                      >
+                        {!canViewProfile && <span className="material-symbols-outlined text-[11px]">lock</span>}
+                        Profile
+                      </button>
                       <button onClick={() => navigate('/pmo/tasks')} className="text-[#0F172A] font-bold text-xs hover:underline">Adjust</button>
                     </td>
                   </tr>

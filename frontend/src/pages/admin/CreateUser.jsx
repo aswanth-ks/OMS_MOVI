@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
+import AccessDenied from '../../components/shared/AccessDenied';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Field = ({ label, required, hint, children }) => (
   <div>
@@ -40,6 +42,8 @@ const EMP_TYPES = [
 
 export default function AdminCreateUser() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('Users', 'create');
 
   const [formData, setFormData] = useState({
     name:                  '',
@@ -138,6 +142,8 @@ export default function AdminCreateUser() {
   const selectCls = `${inputCls} appearance-none cursor-pointer`;
 
   const selectedRole = roles.find(r => r._id === formData.role);
+
+  if (!canCreate) return <PageWrapper><AccessDenied message="You don't have permission to create users." /></PageWrapper>;
 
   return (
     <PageWrapper>
@@ -402,7 +408,8 @@ export default function AdminCreateUser() {
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !canCreate}
+              title={!canCreate ? 'You do not have permission to create users. Contact your administrator.' : ''}
               className="bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-[13px] font-semibold transition-colors shadow-sm flex items-center gap-2"
             >
               {submitting ? (

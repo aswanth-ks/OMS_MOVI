@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authAPI } from '../utils/api';
+import api, { authAPI } from '../utils/api';
 
 const AuthContext = createContext(null);
 
@@ -9,10 +9,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   // Permission check helper — used across the app
+  // permName format matches backend: resource.toLowerCase().replace(spaces, '_') + '.' + action
   const hasPermission = useCallback((resource, action) => {
     if (!user?.role?.permissions) return false;
     if (user.role.slug === 'super-admin') return true;
-    const permName = `${resource.toLowerCase()}.${action}`;
+    const permName = `${resource.toLowerCase().replace(/\s+/g, '_')}.${action}`;
     return user.role.permissions.some(
       (p) => p.name === permName && p.status === 'Active'
     );
@@ -65,6 +66,28 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener('owms:unauthorized', handle401);
     return () => window.removeEventListener('owms:unauthorized', handle401);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Silently refresh permissions every 5 min + on window focus
+  // so Access Matrix changes reflect without requiring logout
+  useEffect(() => {
+    if (!user?._id) return;
+    const refreshPermissions = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        const freshUser = res.data.data;
+        setUser(freshUser);
+        localStorage.setItem('owms_user', JSON.stringify(freshUser));
+      } catch {
+        // Token invalid — 401 listener handles logout
+      }
+    };
+    const interval = setInterval(refreshPermissions, 5 * 60 * 1000);
+    window.addEventListener('focus', refreshPermissions);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', refreshPermissions);
+    };
+  }, [user?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, loading, hasPermission }}>
