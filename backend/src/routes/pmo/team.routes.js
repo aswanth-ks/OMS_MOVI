@@ -8,7 +8,7 @@ const router = Router();
 router.use(protect);
 router.use(pmoScope);
 
-router.get('/', requirePermission('Users', 'read'), getTeam);
+router.get('/', requirePermission('Projects', 'read'), getTeam);
 router.get('/available', getAvailableMembers);
 
 export default router;
