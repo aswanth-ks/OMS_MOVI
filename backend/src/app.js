@@ -61,8 +61,39 @@ app.use(helmet({
 }));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
+const defaultFrontendOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    if (defaultFrontendOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const url = new URL(origin);
+        const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+        const port = Number(url.port);
+        if (isLocalHost && port >= 5173 && port <= 5199) {
+          return callback(null, true);
+        }
+      } catch {
+        // Ignore malformed origins and fall through to the denial below.
+      }
+    }
+
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],

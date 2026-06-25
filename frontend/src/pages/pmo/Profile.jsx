@@ -4,7 +4,7 @@ import {
   Camera, Mail, Building2, Briefcase, User, Calendar, Clock, 
   Pencil, Lock, Check, X, Eye, EyeOff 
 } from 'lucide-react';
-import { employeeAPI } from '../../utils/api';
+import { employeeAPI, pmoAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
 
 const formatDate = (isoStr) => {
@@ -52,6 +52,7 @@ const PasswordStrength = ({ password }) => {
 
 export default function PMOProfile() {
   const [profile, setProfile] = useState(null);
+  const [teamCount, setTeamCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
@@ -74,9 +75,13 @@ export default function PMOProfile() {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const res = await employeeAPI.getProfile();
-      const user = res.data.data;
+      const [profileRes, teamRes] = await Promise.all([
+        employeeAPI.getProfile(),
+        pmoAPI.getTeam(),
+      ]);
+      const user = profileRes.data.data;
       setProfile(user);
+      setTeamCount((teamRes.data?.data || []).length);
       
       const parts = (user.name || '').split(' ');
       const firstName = parts[0] || '';
@@ -215,6 +220,14 @@ export default function PMOProfile() {
               <div className="flex items-center gap-2">
                 <Briefcase size={14} className="text-[#64748B] shrink-0" />
                 <span className="text-xs text-[#0F172A] font-medium truncate">{profile?.designation || 'PMO Lead'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <User size={14} className="text-[#64748B] shrink-0" />
+                <span className="text-xs text-[#0F172A] font-medium truncate">Connected Team: {teamCount}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <User size={14} className="text-[#64748B] shrink-0" />
+                <span className="text-xs text-[#0F172A] font-medium truncate">HR Partner: {profile?.hrManager?.name || '-'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Calendar size={14} className="text-[#64748B] shrink-0" />

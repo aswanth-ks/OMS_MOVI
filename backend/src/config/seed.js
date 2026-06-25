@@ -38,14 +38,8 @@ const permissionsList = generatePermissionDefinitions();
 const seedData = async () => {
   try {
     await connectDB();
-    console.log('Clearing database...');
-    await Promise.all([
-      User.deleteMany(), Role.deleteMany(), Permission.deleteMany(),
-      Department.deleteMany(), Settings.deleteMany(), Project.deleteMany(),
-      Task.deleteMany(), Attendance.deleteMany(), LeaveRequest.deleteMany(),
-      LeaveBalance.deleteMany(), LearningResource.deleteMany(), 
-      Notification.deleteMany(), InternRequest.deleteMany(),
-    ]);
+    console.log('Dropping database...');
+    await mongoose.connection.db.dropDatabase();
 
     console.log('Creating Settings...');
     await Settings.create({ key: 'global' });

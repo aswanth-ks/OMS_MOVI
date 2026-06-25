@@ -7,7 +7,10 @@ export const getProfile = async (req, res, next) => {
       .populate('role', 'name slug permissions')
       .populate('department', 'name code')
       .populate('manager', 'name email avatar')
-      .populate('hrManager', 'name email avatar');
+      .populate('hrManager', 'name email avatar')
+      .populate('mentor', 'name email avatar')
+      .populate('pmoLead', 'name email avatar')
+      .populate('project', 'name status code endDate');
 
     sendSuccess(res, user);
   } catch (error) {
