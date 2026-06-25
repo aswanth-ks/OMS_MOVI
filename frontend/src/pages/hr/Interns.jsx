@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PageWrapper from '../../components/PageWrapper';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 // --- MOCK DATA ---
 const MOCK_INTERNS = [
@@ -19,7 +20,8 @@ const STATUS_COLORS = {
 };
 
 export default function HRInterns() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const canRead = hasPermission('Interns', 'read');
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUniversity, setFilterUniversity] = useState('');
@@ -42,6 +44,8 @@ export default function HRInterns() {
     
     return matchesSearch && matchesUniv && matchesStatus;
   });
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view interns." /></PageWrapper>;
 
   return (
     <PageWrapper>

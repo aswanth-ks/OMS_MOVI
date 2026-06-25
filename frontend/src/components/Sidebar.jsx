@@ -34,36 +34,36 @@ const NAV_CONFIG = {
   ],
   hr: [
     { to: '/hr/dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { to: '/hr/employees', icon: 'badge', label: 'Employees' },
-    { to: '/hr/interns', icon: 'school', label: 'Interns' },
-    { to: '/hr/onboarding', icon: 'person_add', label: 'Onboarding' },
-    { to: '/hr/attendance', icon: 'event_available', label: 'Attendance' },
+    { to: '/hr/employees', icon: 'badge', label: 'Employees', permission: { resource: 'Users', action: 'read' } },
+    { to: '/hr/interns', icon: 'school', label: 'Interns', permission: { resource: 'Interns', action: 'read' } },
+    { to: '/hr/onboarding', icon: 'person_add', label: 'Onboarding', permission: { resource: 'Users', action: 'update' } },
+    { to: '/hr/attendance', icon: 'event_available', label: 'Attendance', permission: { resource: 'Attendance', action: 'read' } },
     { to: '/hr/performance', icon: 'grade', label: 'Performance' },
-    { to: '/hr/tasks', icon: 'view_kanban', label: 'Task Board' },
-    { to: '/hr/tasks/new', icon: CheckSquare, label: 'Assign Task', isLucide: true },
+    { to: '/hr/tasks', icon: 'view_kanban', label: 'Task Board', permission: { resource: 'Tasks', action: 'read' } },
+    { to: '/hr/tasks/new', icon: CheckSquare, label: 'Assign Task', isLucide: true, permission: { resource: 'Tasks', action: 'create' } },
     { to: '/hr/profile', icon: User, label: 'My Profile', isLucide: true },
   ],
   pmo: [
     { to: '/pmo/dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { to: '/pmo/projects', icon: 'work', label: 'Projects' },
-    { to: '/pmo/tasks', icon: 'task_alt', label: 'Task Assignment' },
-    { to: '/pmo/team', icon: Users, label: 'Team', isLucide: true },
-    { to: '/pmo/interns', icon: GraduationCap, label: 'Interns', isLucide: true },
+    { to: '/pmo/projects', icon: 'work', label: 'Projects', permission: { resource: 'Projects', action: 'read' } },
+    { to: '/pmo/tasks', icon: 'task_alt', label: 'Task Assignment', permission: { resource: 'Tasks', action: 'read' } },
+    { to: '/pmo/team', icon: Users, label: 'Team', isLucide: true, permission: { resource: 'Users', action: 'read' } },
+    { to: '/pmo/interns', icon: GraduationCap, label: 'Interns', isLucide: true, permission: { resource: 'Interns', action: 'read' } },
     { to: '/pmo/monitoring', icon: 'monitoring', label: 'Monitoring' },
     { to: '/pmo/timeline', icon: 'timeline', label: 'Timeline' },
-    { to: '/pmo/approvals', icon: 'approval', label: 'Approvals' },
-    { to: '/pmo/reports', icon: BarChart2, label: 'Reports', isLucide: true },
+    { to: '/pmo/approvals', icon: 'approval', label: 'Approvals', permission: { resource: 'Tasks', action: 'read' } },
+    { to: '/pmo/reports', icon: BarChart2, label: 'Reports', isLucide: true, permission: { resource: 'Reports', action: 'read' } },
     { to: '/pmo/profile', icon: User, label: 'My Profile', isLucide: true },
   ],
   admin: [
     { to: '/admin/dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { to: '/admin/users', icon: 'group', label: 'Users' },
-    { to: '/admin/departments', icon: 'domain', label: 'Departments' },
-    { to: '/admin/roles', icon: 'badge', label: 'Roles' },
-    { to: '/admin/access-matrix', icon: Grid2X2, label: 'Access Matrix', isLucide: true },
-    { to: '/admin/audit', icon: 'history', label: 'Audit Logs' },
-    { to: '/admin/reports', icon: 'analytics', label: 'Reports' },
-    { to: '/admin/settings', icon: 'settings', label: 'Settings' },
+    { to: '/admin/users', icon: 'group', label: 'Users', permission: { resource: 'Users', action: 'read' } },
+    { to: '/admin/departments', icon: 'domain', label: 'Departments', permission: { resource: 'Departments', action: 'read' } },
+    { to: '/admin/roles', icon: 'badge', label: 'Roles', permission: { resource: 'Roles', action: 'read' } },
+    { to: '/admin/access-matrix', icon: Grid2X2, label: 'Access Matrix', isLucide: true, permission: { resource: 'Roles', action: 'manage' } },
+    { to: '/admin/audit', icon: 'history', label: 'Audit Logs', permission: { resource: 'Audit Logs', action: 'read' } },
+    { to: '/admin/reports', icon: 'analytics', label: 'Reports', permission: { resource: 'Reports', action: 'read' } },
+    { to: '/admin/settings', icon: 'settings', label: 'Settings', permission: { resource: 'Settings', action: 'read' } },
   ],
 };
 
@@ -89,7 +89,9 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   };
 
   const navKey = resolveNavKey(user?.role);
-  const links = NAV_CONFIG[navKey] || [];
+  const links = (NAV_CONFIG[navKey] || []).filter(
+    ({ permission }) => !permission || hasPermission(permission.resource, permission.action)
+  );
 
   // Extra links unlocked via Access Matrix for this user's role
   const existingPaths = new Set(links.map(l => l.to));

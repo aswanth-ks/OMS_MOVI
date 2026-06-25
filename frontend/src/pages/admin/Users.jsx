@@ -4,7 +4,9 @@ import { Trash2, Upload } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import BulkImportModal from '../../components/shared/BulkImportModal';
+import AccessDenied from '../../components/shared/AccessDenied';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 // ── Hover card popup ──────────────────────────────────────────────────────────
 function UserHoverCard({ user, style }) {
@@ -70,6 +72,8 @@ function UserHoverCard({ user, style }) {
 
 export default function AdminUsers() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+
   const [selectedIds, setSelectedIds] = useState([]);
   const [showImport, setShowImport]   = useState(false);
 
@@ -173,6 +177,13 @@ export default function AdminUsers() {
   const hasPrev    = pagination.hasPrev ?? currentPage > 1;
   const hasNext    = pagination.hasNext ?? currentPage < totalPages;
 
+  // ── Permission gates ─────────────────────────────────────────────────────
+  const canRead   = hasPermission('Users', 'read');
+  const canCreate = hasPermission('Users', 'create');
+  const canUpdate = hasPermission('Users', 'update');
+  const canDelete = hasPermission('Users', 'delete');
+  const canExport = hasPermission('Users', 'export');
+
   // ── Loading skeleton ──────────────────────────────────────────────────────
   const SkeletonRow = () => (
     <tr className="border-b border-[#F1F5F9] animate-pulse">
@@ -183,6 +194,8 @@ export default function AdminUsers() {
       ))}
     </tr>
   );
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view users." /></PageWrapper>;
 
   return (
     <PageWrapper>
@@ -195,20 +208,24 @@ export default function AdminUsers() {
             <p className="text-[14px] text-[#64748B] mt-1">Manage user accounts, roles, and system access.</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => setShowImport(true)}
-              className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
-            >
-              <Upload size={15} />
-              Import CSV
-            </button>
-            <button
-              onClick={() => navigate('/admin/users/new')}
-              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              Create User
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => setShowImport(true)}
+                className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
+              >
+                <Upload size={15} />
+                Import CSV
+              </button>
+            )}
+            {canCreate && (
+              <button
+                onClick={() => navigate('/admin/users/new')}
+                className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded text-[13px] font-medium transition-colors flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">add</span>
+                Create User
+              </button>
+            )}
           </div>
         </div>
 
@@ -308,22 +325,24 @@ export default function AdminUsers() {
             </select>
           </div>
           <div className="flex items-center gap-3">
-            {selectedIds.length > 0 && (
+            {selectedIds.length > 0 && (canUpdate || canDelete) && (
               <div className="flex items-center gap-2 mr-4 border-r border-[#E2E8F0] pr-4">
                 <span className="text-[13px] text-[#64748B] font-medium">{selectedIds.length} selected</span>
-                <button className="text-[12px] font-medium text-[#0F172A] bg-[#F1F5F9] hover:bg-[#E2E8F0] px-2 py-1 rounded transition-colors">Activate</button>
-                <button className="text-[12px] font-medium text-[#0F172A] bg-[#F1F5F9] hover:bg-[#E2E8F0] px-2 py-1 rounded transition-colors">Deactivate</button>
-                <button onClick={() => setDeleteTarget({ ids: selectedIds, name: `${selectedIds.length} selected user(s)` })} className="text-[12px] font-medium text-[#DC2626] bg-[#DC2626]/10 hover:bg-[#DC2626]/20 px-2 py-1 rounded transition-colors">Delete</button>
+                {canUpdate && <button className="text-[12px] font-medium text-[#0F172A] bg-[#F1F5F9] hover:bg-[#E2E8F0] px-2 py-1 rounded transition-colors">Activate</button>}
+                {canUpdate && <button className="text-[12px] font-medium text-[#0F172A] bg-[#F1F5F9] hover:bg-[#E2E8F0] px-2 py-1 rounded transition-colors">Deactivate</button>}
+                {canDelete && <button onClick={() => setDeleteTarget({ ids: selectedIds, name: `${selectedIds.length} selected user(s)` })} className="text-[12px] font-medium text-[#DC2626] bg-[#DC2626]/10 hover:bg-[#DC2626]/20 px-2 py-1 rounded transition-colors">Delete</button>}
               </div>
             )}
             <button onClick={fetchUsers} className="border border-[#E2E8F0] text-[#0F172A] px-3 py-1.5 rounded text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2">
               <span className="material-symbols-outlined text-[16px]">refresh</span>
               Refresh
             </button>
-            <button className="border border-[#E2E8F0] text-[#0F172A] px-3 py-1.5 rounded text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2">
-              <span className="material-symbols-outlined text-[16px]">download</span>
-              Export
-            </button>
+            {canExport && (
+              <button className="border border-[#E2E8F0] text-[#0F172A] px-3 py-1.5 rounded text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px]">download</span>
+                Export
+              </button>
+            )}
           </div>
         </div>
 
@@ -406,13 +425,19 @@ export default function AdminUsers() {
                           <button onClick={() => navigate(`/admin/users/${user._id}`)} className="text-[#64748B] hover:text-[#2563EB] transition-colors" title="View Details">
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                           </button>
-                          <button onClick={() => navigate(`/admin/users/${user._id}/edit`)} className="text-[#64748B] hover:text-[#2563EB] transition-colors" title="Edit">
+                          <button
+                            onClick={() => canUpdate && navigate(`/admin/users/${user._id}/edit`)}
+                            disabled={!canUpdate}
+                            title={canUpdate ? 'Edit' : 'You do not have permission to edit users. Contact your administrator.'}
+                            className={`transition-colors ${canUpdate ? 'text-[#64748B] hover:text-[#2563EB]' : 'text-[#CBD5E1] cursor-not-allowed'}`}
+                          >
                             <span className="material-symbols-outlined text-[18px]">edit</span>
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: user._id, name: user.name }); }}
-                            className="text-[#64748B] hover:text-[#DC2626] transition-colors"
-                            title="Delete user"
+                            onClick={(e) => { e.stopPropagation(); if (canDelete) setDeleteTarget({ id: user._id, name: user.name }); }}
+                            disabled={!canDelete}
+                            title={canDelete ? 'Delete user' : 'You do not have permission to delete users. Contact your administrator.'}
+                            className={`transition-colors ${canDelete ? 'text-[#64748B] hover:text-[#DC2626]' : 'text-[#CBD5E1] cursor-not-allowed'}`}
                           >
                             <Trash2 size={16} />
                           </button>

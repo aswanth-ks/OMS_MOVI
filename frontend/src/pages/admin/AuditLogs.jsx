@@ -8,6 +8,8 @@ import {
 import toast from 'react-hot-toast';
 import PageWrapper from '../../components/PageWrapper';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 // --- HELPERS ---
 const getActionColor = (action) => {
@@ -447,6 +449,9 @@ const Pagination = ({ current, total, rowsPerPage, setRowsPerPage, onPageChange 
 // --- MAIN PAGE COMPONENT ---
 export default function AdminAuditLogs() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canRead   = hasPermission('Audit Logs', 'read');
+  const canExport = hasPermission('Audit Logs', 'export');
   const [logs, setLogs] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, pages: 0 });
   const [searchQuery, setSearchQuery] = useState('');
@@ -563,6 +568,8 @@ export default function AdminAuditLogs() {
       .catch(() => toast.error('Export failed'));
   };
 
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view audit logs." /></PageWrapper>;
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-6 pb-12">
@@ -587,12 +594,14 @@ export default function AdminAuditLogs() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleExport}
-              className="border border-[#E2E8F0] text-[#0F172A] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
-            >
-              <Download size={16} /> Export Logs
-            </button>
+            {canExport && (
+              <button
+                onClick={handleExport}
+                className="border border-[#E2E8F0] text-[#0F172A] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
+              >
+                <Download size={16} /> Export Logs
+              </button>
+            )}
             <button
               onClick={() => fetchLogs()}
               className="border border-[#E2E8F0] text-[#0F172A] px-3 py-2 rounded-lg text-sm font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"

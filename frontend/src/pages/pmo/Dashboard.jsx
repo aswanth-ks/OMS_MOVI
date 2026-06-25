@@ -3,10 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
 import { Plus, CheckSquare, ClipboardCheck, BarChart2, GraduationCap, Clock, AlertCircle } from 'lucide-react';
 import { pmoAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function PMODashboard() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreateProject = hasPermission('Projects', 'create');
+  const canCreateTask    = hasPermission('Tasks', 'create');
 
   const [projects, setProjects] = useState([]);
   const [healthReport, setHealthReport] = useState([]);
@@ -126,13 +130,15 @@ export default function PMODashboard() {
               <span className="material-symbols-outlined text-[18px]">download</span>
               Export Report
             </button>
-            <button 
-              onClick={() => navigate('/pmo/projects')}
-              className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              New Project
-            </button>
+            {canCreateProject && (
+              <button
+                onClick={() => navigate('/pmo/projects')}
+                className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">add</span>
+                New Project
+              </button>
+            )}
           </div>
         </div>
 
@@ -160,12 +166,16 @@ export default function PMODashboard() {
 
         {/* QUICK ACTIONS ROW */}
         <div className="flex flex-wrap gap-3 mt-1">
-          <button onClick={() => navigate('/pmo/projects')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
-            <Plus size={16} className="text-[#64748B]"/> New Project
-          </button>
-          <button onClick={() => navigate('/pmo/tasks')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
-            <CheckSquare size={16} className="text-[#64748B]"/> Assign Task
-          </button>
+          {canCreateProject && (
+            <button onClick={() => navigate('/pmo/projects')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
+              <Plus size={16} className="text-[#64748B]"/> New Project
+            </button>
+          )}
+          {canCreateTask && (
+            <button onClick={() => navigate('/pmo/tasks')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
+              <CheckSquare size={16} className="text-[#64748B]"/> Assign Task
+            </button>
+          )}
           <button onClick={() => navigate('/pmo/approvals')} className="border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-bold hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
             <ClipboardCheck size={16} className="text-[#64748B]"/> Review Approvals
           </button>

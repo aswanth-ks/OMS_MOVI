@@ -6,8 +6,11 @@ import PageWrapper from '../../components/PageWrapper';
 import { InternProgressRing } from '../../components/pmo/InternProgressRing';
 import { pmoAPI, adminAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 export default function PMOInterns() {
+  const { hasPermission } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntern, setSelectedIntern] = useState(null); // For drawer
@@ -102,6 +105,11 @@ export default function PMOInterns() {
     );
   });
 
+  const canRead = hasPermission('Interns', 'read');
+  const canAssignTask = hasPermission('Tasks', 'create');
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view interns." /></PageWrapper>;
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-6 max-w-[1400px] mx-auto pb-12 text-left">
@@ -119,12 +127,14 @@ export default function PMOInterns() {
             >
               <UserPlus size={18} /> Request New Intern
             </button>
-            <button 
-              onClick={() => navigate('/pmo/tasks')}
-              className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
-            >
-              <Plus size={18} /> Assign Task
-            </button>
+            {canAssignTask && (
+              <button
+                onClick={() => navigate('/pmo/tasks')}
+                className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Plus size={18} /> Assign Task
+              </button>
+            )}
           </div>
         </div>
 
@@ -225,7 +235,9 @@ export default function PMOInterns() {
 
                   {/* Actions */}
                   <div className="mt-auto flex flex-wrap gap-2">
-                    <button onClick={() => navigate('/pmo/tasks')} className="flex-1 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded-lg hover:bg-[#1D4ED8] transition-colors">Assign Task</button>
+                    {canAssignTask && (
+                      <button onClick={() => navigate('/pmo/tasks')} className="flex-1 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded-lg hover:bg-[#1D4ED8] transition-colors">Assign Task</button>
+                    )}
                     <button onClick={() => setSelectedIntern(intern)} className="flex-1 py-1.5 bg-white border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC] transition-colors">Performance Note</button>
                   </div>
 

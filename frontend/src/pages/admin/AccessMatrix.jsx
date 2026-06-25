@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Save, AlertCircle, CheckCircle, ChevronRight, Lock } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 // ── Role badge colour pool (cycles if more roles than colours) ────────────
 const ROLE_COLOURS = [
@@ -19,6 +21,8 @@ const ROLE_COLOURS = [
 
 export default function AdminAccessMatrix() {
   const navigate = useNavigate();
+  const { hasPermission: authHasPermission } = useAuth();
+  const canManageMatrix = authHasPermission('Roles', 'manage');
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [roles,       setRoles]       = useState([]);
@@ -157,6 +161,8 @@ export default function AdminAccessMatrix() {
     );
   }
 
+  if (!canManageMatrix) return <PageWrapper><AccessDenied message="You don't have permission to manage the Access Matrix." /></PageWrapper>;
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-6 pb-20 relative">
@@ -181,9 +187,10 @@ export default function AdminAccessMatrix() {
             </button>
             <button
               onClick={handleSave}
-              disabled={!isDirty || saving}
+              disabled={!isDirty || saving || !canManageMatrix}
+              title={!canManageMatrix ? 'You do not have permission to save matrix changes.' : ''}
               className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 text-white ${
-                isDirty && !saving ? 'bg-[#2563EB] hover:bg-blue-700' : 'bg-[#94A3B8] cursor-not-allowed'
+                isDirty && !saving && canManageMatrix ? 'bg-[#2563EB] hover:bg-blue-700' : 'bg-[#94A3B8] cursor-not-allowed'
               }`}
             >
               {saving ? (
@@ -289,8 +296,8 @@ export default function AdminAccessMatrix() {
                               ) : (
                                 <div className="flex items-center justify-center">
                                   <div
-                                    onClick={() => handleToggle(role._id, perm._id)}
-                                    className={`flex items-center justify-center w-5 h-5 rounded-sm border transition-colors cursor-pointer
+                                    onClick={() => canManageMatrix && handleToggle(role._id, perm._id)}
+                                    className={`flex items-center justify-center w-5 h-5 rounded-sm border transition-colors ${canManageMatrix ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}
                                       ${checked
                                         ? 'bg-[#2563EB] border-[#2563EB] text-white'
                                         : 'bg-white border-[#CBD5E1] text-transparent hover:border-[#94A3B8]'
@@ -346,7 +353,7 @@ export default function AdminAccessMatrix() {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || !canManageMatrix}
                   className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-blue-600 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                 >
                   {saving && (

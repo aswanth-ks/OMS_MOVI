@@ -3,6 +3,8 @@ import { Search, Clock, Plus, Play, Download, MoreVertical, Briefcase, Users, Ch
 import PageWrapper from '../../components/PageWrapper';
 import { pmoAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 const mockPMOReports = [
   { id: 1, name: "Project Health Overview", category: "Project Reports", description: "Comprehensive health status for all active projects including completion rates and risk flags.", schedule: "Weekly", lastRun: "2 hours ago", lastRunStatus: "SUCCESS", records: 12, fileSize: "1.2 MB", icon: Briefcase, iconColor: "text-blue-600 bg-blue-100" },
@@ -45,6 +47,7 @@ const downloadCSV = (data, filename) => {
 };
 
 export default function PMOReports() {
+  const { hasPermission } = useAuth();
   const [activeCategory, setActiveCategory] = useState('All Reports');
   const [searchTerm, setSearchTerm] = useState('');
   const [runningReportId, setRunningReportId] = useState(null);
@@ -132,11 +135,16 @@ export default function PMOReports() {
     }
   };
 
+  const canRead = hasPermission('Reports', 'read');
+  const canExport = hasPermission('Reports', 'export');
+
   const filteredReports = mockPMOReports.filter(r => {
     const matchCategory = activeCategory === 'All Reports' || r.category === activeCategory;
     const matchSearch = r.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchCategory && matchSearch;
   });
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view reports." /></PageWrapper>;
 
   return (
     <PageWrapper>
@@ -225,14 +233,16 @@ export default function PMOReports() {
                     <Play size={14} className="fill-current" /> {isRunning ? 'Running...' : 'Run & Export'}
                   </button>
                   
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => handleRunReport(report.id, report.name)}
-                      className="p-2 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
-                    >
-                      <Download size={16} /> <span className="hidden sm:inline">Export</span>
-                    </button>
-                  </div>
+                  {canExport && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleRunReport(report.id, report.name)}
+                        className="p-2 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
+                      >
+                        <Download size={16} /> <span className="hidden sm:inline">Export</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
               </div>
