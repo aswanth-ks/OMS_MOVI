@@ -1,37 +1,94 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  UserPlus, Search, Clock, CheckCircle2, 
-  ChevronRight, Filter, AlertCircle, FileText 
+  Search, Clock, CheckCircle2, 
+  Filter, AlertCircle, FileText, Check 
 } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
-
-// --- MOCK DATA ---
-const PENDING_APPROVALS = [
-  { id: 'REQ-101', name: 'Jonathan Reeves', role: 'Backend Developer', type: 'Full-time', dept: 'Engineering', submitted: '2 hours ago', status: 'Pending PMO' },
-  { id: 'REQ-102', name: 'Alicia Keys', role: 'Marketing Intern', type: 'Intern', dept: 'Marketing', submitted: 'Yesterday', status: 'Pending PMO' },
-  { id: 'REQ-103', name: 'Marcus Chen', role: 'Product Manager', type: 'Full-time', dept: 'Product', submitted: '2 days ago', status: 'Pending PMO' },
-];
-
-const ACTIVE_ONBOARDING = [
-  { id: 'ONB-201', name: 'Elena Gilbert', role: 'UI/UX Designer', joined: 'Oct 24, 2024', progress: 80, tasksComplete: 4, tasksTotal: 5 },
-  { id: 'ONB-202', name: 'Stefan Salvatore', role: 'DevOps Engineer', joined: 'Oct 25, 2024', progress: 40, tasksComplete: 2, tasksTotal: 5 },
-  { id: 'ONB-203', name: 'Damon Salvatore', role: 'Sales Executive', joined: 'Oct 26, 2024', progress: 20, tasksComplete: 1, tasksTotal: 5 },
-];
+import { hrAPI } from '../../utils/api';
+import toast from 'react-hot-toast';
 
 const ONBOARDING_TASKS = [
-  { id: 1, text: 'Issue company laptop and accessories' },
-  { id: 2, text: 'Create workspace email and Slack accounts' },
-  { id: 3, text: 'Add to payroll system (Gusto)' },
-  { id: 4, text: 'Schedule HR Orientation meeting' },
-  { id: 5, text: 'Assign compliance training modules' },
+  { key: 'welcomeEmail', text: 'Send Welcome Email' },
+  { key: 'idCardIssued', text: 'Issue Company ID Card' },
+  { key: 'systemAccess', text: 'Set Up Workspace & System Access' },
+  { key: 'deptIntroduction', text: 'Department Introduction' },
+  { key: 'equipmentAssigned', text: 'Assign Equipment & Laptop' },
+  { key: 'hrDocumentation', text: 'Complete HR Documentation' },
+  { key: 'mentorAssigned', text: 'Assign Mentor' },
+  { key: 'firstWeekSchedule', text: 'Share First Week Schedule' },
 ];
 
 export default function HROnboarding() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' = in-progress, 'completed' = onboarding complete
   const [selectedOnboardee, setSelectedOnboardee] = useState(null);
-  
+  const [pendingOnboarding, setPendingOnboarding] = useState([]);
+  const [completedOnboarding, setCompletedOnboarding] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const loadOnboardingData = async () => {
+    try {
+      setLoading(true);
+      const [pendingRes, completedRes] = await Promise.all([
+        hrAPI.getPendingOnboarding(),
+        hrAPI.getCompletedOnboarding()
+      ]);
+      setPendingOnboarding(pendingRes.data?.data || []);
+      setCompletedOnboarding(completedRes.data?.data || []);
+    } catch (err) {
+      console.error('Error loading onboarding records:', err);
+      toast.error('Failed to load onboarding records');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOnboardingData();
+  }, []);
+
+  const handleToggleTask = async (userId, taskKey, isChecked) => {
+    try {
+      await hrAPI.updateOnboardingChecklist(userId, {
+        item: taskKey,
+        completed: isChecked
+      });
+      
+      // Reload pending and completed lists
+      const [pendingRes, completedRes] = await Promise.all([
+        hrAPI.getPendingOnboarding(),
+        hrAPI.getCompletedOnboarding()
+      ]);
+      const newPending = pendingRes.data?.data || [];
+      setPendingOnboarding(newPending);
+      setCompletedOnboarding(completedRes.data?.data || []);
+
+      // If the checklist is completed, it might shift to the completed tab
+      const stillPending = newPending.find(u => u._id === userId);
+      if (stillPending) {
+        setSelectedOnboardee(stillPending);
+      } else {
+        setSelectedOnboardee(null);
+        toast.success('Onboarding checklist completed!');
+      }
+    } catch (err) {
+      console.error('Error updating checklist:', err);
+      toast.error(err.response?.data?.message || 'Failed to update checklist item');
+    }
+  };
+
+  const filteredPending = pendingOnboarding.filter(u => 
+    u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.employeeId?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredCompleted = completedOnboarding.filter(u => 
+    u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.employeeId?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-full">
@@ -41,7 +98,7 @@ export default function HROnboarding() {
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Onboarding & Requests</h1>
             <p className="text-[13px] text-[#64748B] mt-0.5">
-              Submit hiring requests to PMO and track new employee onboarding checklists.
+              Submit hiring requests and track onboarding checklists for new hires.
             </p>
           </div>
           <button 
@@ -56,7 +113,7 @@ export default function HROnboarding() {
         {/* TABS */}
         <div className="px-6 border-b border-[#E2E8F0] bg-white shrink-0 flex items-center gap-6">
           <button 
-            onClick={() => setActiveTab('pending')}
+            onClick={() => { setActiveTab('pending'); setSelectedOnboardee(null); }}
             className={`py-3 text-[13px] font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'pending' 
                 ? 'border-[#2563EB] text-[#2563EB]' 
@@ -64,23 +121,23 @@ export default function HROnboarding() {
             }`}
           >
             <Clock size={16} />
-            Pending PMO Approvals
+            In Progress
             <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'pending' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-              {PENDING_APPROVALS.length}
+              {filteredPending.length}
             </span>
           </button>
           <button 
-            onClick={() => setActiveTab('active')}
+            onClick={() => { setActiveTab('completed'); setSelectedOnboardee(null); }}
             className={`py-3 text-[13px] font-medium border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'active' 
+              activeTab === 'completed' 
                 ? 'border-[#2563EB] text-[#2563EB]' 
                 : 'border-transparent text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
             <CheckCircle2 size={16} />
-            Active Onboarding
-            <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-              {ACTIVE_ONBOARDING.length}
+            Completed
+            <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+              {filteredCompleted.length}
             </span>
           </button>
         </div>
@@ -99,21 +156,27 @@ export default function HROnboarding() {
                    className="w-full border border-[#E2E8F0] rounded-md py-1.5 pl-9 pr-3 text-[13px] focus:outline-none focus:border-[#2563EB] bg-white shadow-sm"
                    placeholder="Search records..."
                    type="text"
+                   value={searchTerm}
+                   onChange={e => setSearchTerm(e.target.value)}
                  />
                </div>
-               <button className="border border-[#E2E8F0] text-[#0F172A] bg-white px-3 py-1.5 rounded-md text-[13px] font-medium hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
-                 <Filter size={14} /> Filters
+               <button onClick={loadOnboardingData} className="border border-[#E2E8F0] text-[#0F172A] bg-white px-3 py-1.5 rounded-md text-[13px] font-medium hover:bg-[#F1F5F9] transition-colors flex items-center gap-2 shadow-sm">
+                 <span className="material-symbols-outlined text-[16px]">sync</span> Refresh
                </button>
             </div>
 
-            {/* TAB CONTENT: PENDING */}
-            {activeTab === 'pending' && (
+            {loading && (
+              <div className="text-center py-12 text-[14px] text-[#64748B]">Loading onboarding records...</div>
+            )}
+
+            {/* TAB CONTENT: PENDING (IN PROGRESS) */}
+            {!loading && activeTab === 'pending' && (
               <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm overflow-hidden">
                 <div className="p-4 bg-amber-50 border-b border-amber-100 flex items-start gap-3">
                    <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={18} />
                    <div>
-                     <h3 className="text-[13px] font-semibold text-amber-900">Awaiting PMO Action</h3>
-                     <p className="text-[12px] text-amber-700 mt-0.5">These employee requests have been submitted to the Project Management Office for budget and role approval. They will appear in the Active Onboarding tab once approved.</p>
+                     <h3 className="text-[13px] font-semibold text-amber-900">Onboarding Checklists In Progress</h3>
+                     <p className="text-[12px] text-amber-700 mt-0.5">Click on any candidate row below to open their onboarding checklist drawer and complete tasks.</p>
                    </div>
                 </div>
                 <table className="w-full text-left border-collapse whitespace-nowrap">
@@ -121,80 +184,89 @@ export default function HROnboarding() {
                     <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
                       <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Candidate</th>
                       <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Role & Dept</th>
-                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Type</th>
-                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Submitted</th>
-                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase text-right">Status</th>
+                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Created Date</th>
+                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase text-right">Onboarding Progress</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {PENDING_APPROVALS.map((req) => (
-                      <tr key={req.id} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0">
-                        <td className="px-5 py-3.5">
-                          <div className="text-[14px] font-medium text-[#0F172A]">{req.name}</div>
-                          <div className="text-[12px] text-[#64748B] font-mono mt-0.5">{req.id}</div>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <div className="text-[13px] text-[#0F172A]">{req.role}</div>
-                          <div className="text-[12px] text-[#64748B] mt-0.5">{req.dept}</div>
-                        </td>
-                        <td className="px-5 py-3.5">
-                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F1F5F9] text-[#475569]">
-                             {req.type}
-                           </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-[13px] text-[#64748B]">{req.submitted}</td>
-                        <td className="px-5 py-3.5 text-right">
-                           <span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-semibold bg-amber-100 text-amber-700">
-                             <Clock size={12} className="mr-1.5" />
-                             {req.status}
-                           </span>
-                        </td>
+                    {filteredPending.length > 0 ? (
+                      filteredPending.map((req) => (
+                        <tr 
+                          key={req._id} 
+                          onClick={() => setSelectedOnboardee(req)}
+                          className={`border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0 cursor-pointer ${selectedOnboardee?._id === req._id ? 'bg-[#EFF6FF]' : ''}`}
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="text-[14px] font-medium text-[#0F172A]">{req.name}</div>
+                            <div className="text-[12px] text-[#64748B] font-mono mt-0.5">{req.employeeId || '-'}</div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="text-[13px] text-[#0F172A]">{req.role?.name || '-'}</div>
+                            <div className="text-[12px] text-[#64748B] mt-0.5">{req.department?.name || '-'}</div>
+                          </td>
+                          <td className="px-5 py-3.5 text-[13px] text-[#64748B]">
+                            {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '-'}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                             <div className="flex items-center justify-end gap-3">
+                               <div className="w-24 bg-[#F1F5F9] rounded-full h-1.5 overflow-hidden">
+                                 <div className="bg-[#10B981] h-full rounded-full" style={{ width: `${req.onboardingProgress || 0}%` }}></div>
+                               </div>
+                               <span className="text-[12px] font-semibold text-[#0F172A]">{req.onboardingProgress || 0}%</span>
+                             </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-5 py-8 text-center text-sm text-[#64748B]">No onboarding candidates in progress.</td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
             )}
 
-            {/* TAB CONTENT: ACTIVE ONBOARDING */}
-            {activeTab === 'active' && (
+            {/* TAB CONTENT: COMPLETED */}
+            {!loading && activeTab === 'completed' && (
               <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm overflow-hidden">
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
                       <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Employee</th>
                       <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Role</th>
-                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Join Date</th>
-                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Onboarding Progress</th>
+                      <th className="px-5 py-3 text-[12px] font-semibold text-[#64748B] uppercase">Completion Date</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {ACTIVE_ONBOARDING.map((person) => (
-                      <tr 
-                        key={person.id} 
-                        className={`border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0 cursor-pointer ${selectedOnboardee?.id === person.id ? 'bg-[#EFF6FF]' : ''}`}
-                        onClick={() => setSelectedOnboardee(person)}
-                      >
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-[#E2E8F0] text-[#64748B] flex items-center justify-center font-bold text-[12px] shrink-0">
-                              {person.name.split(' ').map(n=>n[0]).join('')}
+                    {filteredCompleted.length > 0 ? (
+                      filteredCompleted.map((person) => (
+                        <tr 
+                          key={person._id} 
+                          className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0"
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#ECFDF5] text-[#10B981] flex items-center justify-center font-bold text-[12px] shrink-0">
+                                {person.name.split(' ').map(n=>n[0]).join('')}
+                              </div>
+                              <div>
+                                <div className="text-[14px] font-medium text-[#0F172A]">{person.name}</div>
+                                <div className="text-[12px] text-[#64748B] font-mono mt-0.5">{person.employeeId || '-'}</div>
+                              </div>
                             </div>
-                            <div className="text-[14px] font-medium text-[#0F172A]">{person.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 text-[13px] text-[#64748B]">{person.role}</td>
-                        <td className="px-5 py-3.5 text-[13px] text-[#64748B]">{person.joined}</td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3 w-48">
-                            <div className="flex-1 bg-[#F1F5F9] rounded-full h-1.5 overflow-hidden">
-                              <div className="bg-[#10B981] h-full rounded-full" style={{ width: `${person.progress}%` }}></div>
-                            </div>
-                            <span className="text-[12px] font-medium text-[#0F172A] shrink-0">{person.tasksComplete}/{person.tasksTotal}</span>
-                          </div>
-                        </td>
+                          </td>
+                          <td className="px-5 py-3.5 text-[13px] text-[#64748B]">{person.role?.name || '-'}</td>
+                          <td className="px-5 py-3.5 text-[13px] text-[#64748B]">
+                            {person.updatedAt ? new Date(person.updatedAt).toLocaleDateString() : '-'}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="px-5 py-8 text-center text-sm text-[#64748B]">No completed onboarding records.</td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -202,7 +274,7 @@ export default function HROnboarding() {
           </div>
 
           {/* RIGHT SIDEBAR: CHECKLIST DRAWER */}
-          {(activeTab === 'active' && selectedOnboardee) && (
+          {(!loading && activeTab === 'pending' && selectedOnboardee) && (
             <div className="w-full lg:w-1/3 bg-white border-l border-[#E2E8F0] flex flex-col h-full shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
               <div className="px-6 py-5 border-b border-[#E2E8F0] flex justify-between items-start bg-[#F8FAFC]">
                 <div>
@@ -218,24 +290,25 @@ export default function HROnboarding() {
               </div>
 
               <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
-                <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 mb-6">
+                <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg p-4 mb-6">
                   <div className="flex justify-between items-center mb-2">
-                     <span className="text-[13px] font-bold text-emerald-800">Overall Progress</span>
-                     <span className="text-[13px] font-bold text-emerald-600">{selectedOnboardee.progress}%</span>
+                     <span className="text-[13px] font-bold text-[#1E40AF]">Overall Progress</span>
+                     <span className="text-[13px] font-bold text-[#1D4ED8]">{selectedOnboardee.onboardingProgress || 0}%</span>
                   </div>
-                  <div className="w-full bg-emerald-200 rounded-full h-2 overflow-hidden">
-                    <div className="bg-[#10B981] h-full rounded-full transition-all duration-500" style={{ width: `${selectedOnboardee.progress}%` }}></div>
+                  <div className="w-full bg-[#DBEAFE] rounded-full h-2 overflow-hidden">
+                    <div className="bg-[#2563EB] h-full rounded-full transition-all duration-500" style={{ width: `${selectedOnboardee.onboardingProgress || 0}%` }}></div>
                   </div>
                 </div>
 
                 <h3 className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider mb-4">HR Action Items</h3>
                 
                 <div className="space-y-3">
-                  {ONBOARDING_TASKS.map((task, idx) => {
-                    const isChecked = idx < selectedOnboardee.tasksComplete;
+                  {ONBOARDING_TASKS.map((task) => {
+                    const isChecked = !!selectedOnboardee.onboardingChecklist?.[task.key];
                     return (
                       <div 
-                        key={task.id} 
+                        key={task.key} 
+                        onClick={() => handleToggleTask(selectedOnboardee._id, task.key, !isChecked)}
                         className={`flex items-start gap-3 p-3 rounded-lg border ${isChecked ? 'bg-[#F8FAFC] border-[#E2E8F0]' : 'bg-white border-[#CBD5E1] shadow-sm'} transition-colors cursor-pointer group`}
                       >
                         <div className={`w-5 h-5 rounded border mt-0.5 flex items-center justify-center shrink-0 transition-colors ${isChecked ? 'bg-[#2563EB] border-[#2563EB] text-white' : 'border-[#94A3B8] group-hover:border-[#2563EB]'}`}>

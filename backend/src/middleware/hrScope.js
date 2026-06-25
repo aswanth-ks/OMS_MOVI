@@ -1,7 +1,11 @@
+import Role from '../models/Role.js';
+
 /**
  * HR Scope Middleware
- * Ensures HR Managers only see data for employees they manage,
- * while Super Admin can see all data.
+ * Restricts HR Manager access to only 'employee' and 'intern' role users.
+ * Excludes admins, PMO leads, and other HR managers from HR views.
+ * Super Admin bypasses all restrictions.
+ *
  * Attaches a `scopeFilter` object to the request which can be spread into Mongoose queries.
  */
 export const hrScope = async (req, res, next) => {
@@ -19,8 +23,14 @@ export const hrScope = async (req, res, next) => {
     }
 
     if (req.user.role.slug === 'hr-manager') {
-      // HR sees users where hrManager === req.user._id
-      req.scopeFilter = { hrManager: req.user._id };
+      // Fetch employee and intern roles only
+      const allowedRoles = await Role.find({ slug: { $in: ['employee', 'intern'] } });
+      const allowedRoleIds = allowedRoles.map(r => r._id);
+
+      // HR sees ALL employees and interns (not restricted to a specific hrManager assignment)
+      req.scopeFilter = {
+        role: { $in: allowedRoleIds }
+      };
       return next();
     }
 

@@ -1,18 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import PageWrapper from '../../components/PageWrapper';
-
-// --- MOCK DATA ---
-const MOCK_EMPLOYEES = [
-  { id: 'EMP-001', name: 'Sarah Jenkins', email: 'sarah.j@movicloudlabs.com', dept: 'Engineering', designation: 'Senior Frontend Engineer', type: 'Full-time', joinDate: '2021-03-15', status: 'Active', avatar: 'S', assignedHR: 'HR' },
-  { id: 'EMP-002', name: 'Michael Chang', email: 'michael.c@movicloudlabs.com', dept: 'Design', designation: 'Product Designer', type: 'Full-time', joinDate: '2022-07-01', status: 'Active', avatar: 'M', assignedHR: 'HR' },
-  { id: 'EMP-003', name: 'Alex Wong', email: 'alex.w@movicloudlabs.com', dept: 'Engineering', designation: 'Software Engineering Intern', type: 'Intern', joinDate: '2024-01-10', status: 'Active', avatar: 'A', assignedHR: 'ARUN' },
-  { id: 'EMP-004', name: 'Jessica Pearson', email: 'jessica.p@movicloudlabs.com', dept: 'Sales', designation: 'Regional Director', type: 'Full-time', joinDate: '2019-11-20', status: 'On Leave', avatar: 'J', assignedHR: 'ARUN' },
-  { id: 'EMP-005', name: 'David Kim', email: 'david.k@movicloudlabs.com', dept: 'Marketing', designation: 'Content Strategist', type: 'Part-time', joinDate: '2023-05-12', status: 'Active', avatar: 'D', assignedHR: 'HR' },
-  { id: 'EMP-006', name: 'Emma Watson', email: 'emma.w@movicloudlabs.com', dept: 'HR & Ops', designation: 'HR Coordinator', type: 'Contract', joinDate: '2023-09-01', status: 'Active', avatar: 'E', assignedHR: 'ARUN' },
-  { id: 'EMP-007', name: 'James Gordon', email: 'james.g@movicloudlabs.com', dept: 'Finance', designation: 'Accountant', type: 'Full-time', joinDate: '2020-02-28', status: 'Terminated', avatar: 'J', assignedHR: 'HR' },
-];
+import { hrAPI } from '../../utils/api';
 
 const TYPE_COLORS = {
   'Full-time': 'bg-blue-100 text-blue-700',
@@ -23,37 +12,62 @@ const TYPE_COLORS = {
 
 const STATUS_COLORS = {
   'Active': 'bg-[#16A34A]/10 text-[#16A34A]',
-  'On Leave': 'bg-[#F59E0B]/10 text-[#D97706]',
-  'Terminated': 'bg-[#DC2626]/10 text-[#DC2626]'
+  'Inactive': 'bg-[#F59E0B]/10 text-[#D97706]',
+  'Suspended': 'bg-[#DC2626]/10 text-[#DC2626]'
 };
 
 export default function Employees() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Only show employees assigned to the logged-in HR user
-  const myEmployees = MOCK_EMPLOYEES.filter(emp => !user?.name || emp.assignedHR.toLowerCase() === user.name.toLowerCase());
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const response = await hrAPI.getEmployees({ page: 1, limit: 500 });
+        setEmployees(response.data?.data || []);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load employee records');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEmployees();
+  }, []);
+
+  const initialsFor = (name = '') => name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('') || '?';
 
   // Derived unique lists for filters
-  const departments = [...new Set(myEmployees.map(e => e.dept))];
-  const types = [...new Set(myEmployees.map(e => e.type))];
-  const statuses = [...new Set(myEmployees.map(e => e.status))];
+  const departments = useMemo(() => [...new Set(employees.map((e) => e.department?.name).filter(Boolean))], [employees]);
+  const types = useMemo(() => [...new Set(employees.map((e) => e.employmentType).filter(Boolean))], [employees]);
+  const statuses = useMemo(() => [...new Set(employees.map((e) => e.status).filter(Boolean))], [employees]);
 
   // Filter logic
-  const filteredEmployees = myEmployees.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          emp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          emp.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDept = filterDept ? emp.dept === filterDept : true;
-    const matchesType = filterType ? emp.type === filterType : true;
+  const filteredEmployees = useMemo(() => employees.filter((emp) => {
+    const id = emp.employeeId || '';
+    const matchesSearch =
+      emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDept = filterDept ? emp.department?.name === filterDept : true;
+    const matchesType = filterType ? emp.employmentType === filterType : true;
     const matchesStatus = filterStatus ? emp.status === filterStatus : true;
-    
+
     return matchesSearch && matchesDept && matchesType && matchesStatus;
-  });
+  }), [employees, filterDept, filterStatus, filterType, searchTerm]);
 
   return (
     <PageWrapper>
@@ -132,6 +146,17 @@ export default function Employees() {
 
         {/* TABLE VIEW */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm overflow-hidden flex-1">
+          {loading && (
+            <div className="px-4 py-12 text-center text-[14px] text-[#64748B]">Loading employee records...</div>
+          )}
+
+          {!loading && error && (
+            <div className="px-4 py-12 text-center">
+              <p className="text-[14px] font-medium text-[#DC2626]">{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
@@ -149,15 +174,15 @@ export default function Employees() {
                 {filteredEmployees.length > 0 ? (
                   filteredEmployees.map((emp) => (
                     <tr 
-                      key={emp.id} 
+                      key={emp._id} 
                       className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0 cursor-pointer"
-                      onClick={() => navigate(`/hr/employees/${emp.id}`)}
+                      onClick={() => navigate(`/hr/employees/${emp._id}`)}
                     >
                       {/* Avatar + Name + Email */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-[#E2E8F0] text-[#64748B] flex items-center justify-center font-bold text-[12px] shrink-0">
-                            {emp.avatar}
+                            {initialsFor(emp.name)}
                           </div>
                           <div>
                             <div className="text-[14px] font-medium text-[#0F172A]">{emp.name}</div>
@@ -168,30 +193,32 @@ export default function Employees() {
 
                       {/* ID */}
                       <td className="px-4 py-3 text-[13px] font-mono text-[#64748B]">
-                        {emp.id}
+                        {emp.employeeId || '-'}
                       </td>
 
                       {/* Department & Designation */}
                       <td className="px-4 py-3">
-                        <div className="text-[13px] font-medium text-[#0F172A]">{emp.dept}</div>
+                        <div className="text-[13px] font-medium text-[#0F172A]">{emp.department?.name || '-'}</div>
                         <div className="text-[12px] text-[#64748B] mt-0.5">{emp.designation}</div>
                       </td>
 
                       {/* Type */}
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${TYPE_COLORS[emp.type]}`}>
-                          {emp.type}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${TYPE_COLORS[emp.employmentType] || 'bg-slate-100 text-slate-700'}`}>
+                          {emp.employmentType || '-'}
                         </span>
                       </td>
 
                       {/* Join Date */}
                       <td className="px-4 py-3 text-[13px] text-[#64748B]">
-                        {new Date(emp.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        {emp.joinDate
+                          ? new Date(emp.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                          : '-'}
                       </td>
 
                       {/* Status */}
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${STATUS_COLORS[emp.status]}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${STATUS_COLORS[emp.status] || 'bg-slate-100 text-slate-700'}`}>
                           {emp.status}
                         </span>
                       </td>
@@ -200,7 +227,7 @@ export default function Employees() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                           <button 
-                            onClick={() => navigate(`/hr/employees/${emp.id}`)}
+                            onClick={() => navigate(`/hr/employees/${emp._id}`)}
                             className="text-[#64748B] hover:text-[#2563EB] transition-colors"
                             title="View Profile"
                           >
@@ -230,6 +257,7 @@ export default function Employees() {
               </tbody>
             </table>
           </div>
+          )}
           
           {/* Pagination Footer */}
           <div className="px-4 py-3 border-t border-[#E2E8F0] bg-white flex items-center justify-between">

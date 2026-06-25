@@ -1,37 +1,116 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
+import { hrAPI } from '../../utils/api';
 
 export default function HREmployeeDetails() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [employee, setEmployee] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Mock Employee Data (Adapted for HR view)
-  const emp = {
-    id: id || 'EMP-001',
-    name: 'Sarah Jenkins',
-    email: 'sarah.j@movicloudlabs.com',
-    phone: '+1 (555) 987-6543',
-    department: 'Engineering',
-    designation: 'Senior Frontend Engineer',
-    type: 'Full-time',
-    status: 'Active',
-    joined: 'March 15, 2021',
-    manager: 'Michael Chen',
-    hrRepresentative: 'Amanda Reed',
-    location: 'San Francisco, CA (HQ)',
-    salaryBand: 'L4 (Senior)',
-    leaveBalance: '14 Days (Annual)',
-    sickLeave: '6 Days (Accrued)'
-  };
+  useEffect(() => {
+    const loadEmployee = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const response = await hrAPI.getEmployee(id);
+        setEmployee(response.data?.data || null);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load employee profile');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const activityHistory = [
-    { id: 1, action: 'Annual leave request approved', time: 'Today, 10:42 AM', icon: 'event_available', color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { id: 2, action: 'Updated emergency contact information', time: 'Yesterday, 02:15 PM', icon: 'contact_phone', color: 'text-blue-500', bg: 'bg-blue-50' },
-    { id: 3, action: 'Completed "Annual Harassment Training"', time: 'Nov 15, 2024', icon: 'verified', color: 'text-purple-500', bg: 'bg-purple-50' },
-    { id: 4, action: 'Performance review marked as complete', time: 'Oct 30, 2024', icon: 'star_rate', color: 'text-amber-500', bg: 'bg-amber-50' },
-    { id: 5, action: 'Promoted to Senior Frontend Engineer', time: 'March 15, 2024', icon: 'trending_up', color: 'text-indigo-500', bg: 'bg-indigo-50' },
-  ];
+    if (id) loadEmployee();
+  }, [id]);
+
+  const initials = useMemo(() => {
+    const name = employee?.name || '';
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0].toUpperCase())
+      .join('') || '?';
+  }, [employee?.name]);
+
+  const emp = useMemo(() => {
+    if (!employee) return null;
+
+    const leave = employee.leaveBalance || {};
+    const annualRemaining = Math.max((leave.annual?.total || 0) - (leave.annual?.used || 0), 0);
+    const sickRemaining = Math.max((leave.sick?.total || 0) - (leave.sick?.used || 0), 0);
+    return {
+      id: employee.employeeId || '-',
+      name: employee.name,
+      email: employee.email,
+      phone: employee.phone || '-',
+      department: employee.department?.name || '-',
+      designation: employee.designation || '-',
+      type: employee.employmentType || '-',
+      status: employee.status || '-',
+      joined: employee.joinDate
+        ? new Date(employee.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        : '-',
+      manager: employee.manager?.name || '-',
+      hrRepresentative: employee.hrManager?.name || '-',
+      location: employee.address || '-',
+      salaryBand: '-',
+      leaveBalance: `${annualRemaining} Days (Annual)`,
+      sickLeave: `${sickRemaining} Days (Sick)`,
+    };
+  }, [employee]);
+
+  const activityHistory = useMemo(() => {
+    const notes = employee?.notes || [];
+    return notes
+      .slice()
+      .reverse()
+      .slice(0, 5)
+      .map((note, index) => ({
+        id: note._id || `${index}`,
+        action: note.text,
+        time: new Date(note.createdAt).toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        icon: 'description',
+        color: 'text-blue-500',
+        bg: 'bg-blue-50',
+      }));
+  }, [employee]);
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="font-sans text-[#0F172A] max-w-6xl mx-auto py-10 text-[14px] text-[#64748B]">
+          Loading employee profile...
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error || !emp) {
+    return (
+      <PageWrapper>
+        <div className="font-sans text-[#0F172A] max-w-6xl mx-auto py-10">
+          <p className="text-[14px] font-medium text-[#DC2626]">{error || 'Employee not found'}</p>
+          <button
+            onClick={() => navigate('/hr/employees')}
+            className="mt-4 border border-[#E2E8F0] bg-white text-[#0F172A] px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors"
+          >
+            Back to Employees
+          </button>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
@@ -51,7 +130,7 @@ export default function HREmployeeDetails() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
               {/* Avatar */}
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#F1F5F9] text-[#64748B] flex items-center justify-center text-[32px] font-bold shrink-0 relative border border-[#E2E8F0]">
-                {emp.name.split(' ').map(n=>n[0]).join('')}
+                {initials}
                 <div className="absolute bottom-1 right-1 w-4 h-4 bg-[#16A34A] border-2 border-white rounded-full"></div>
               </div>
               
@@ -217,7 +296,7 @@ export default function HREmployeeDetails() {
             <div className="absolute left-[27px] sm:left-[43px] top-4 bottom-4 w-[2px] bg-[#E2E8F0]"></div>
             
             <div className="space-y-8">
-              {activityHistory.map((item, index) => (
+              {activityHistory.length > 0 ? activityHistory.map((item, index) => (
                 <div key={item.id} className="relative flex items-start gap-6 group">
                   {/* Timeline Dot/Icon */}
                   <div className={`w-10 h-10 rounded-full ${item.bg} ${item.color} flex items-center justify-center border-4 border-white shadow-sm relative z-10 shrink-0 group-hover:scale-110 transition-transform`}>
@@ -228,13 +307,14 @@ export default function HREmployeeDetails() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full pt-2 gap-2">
                     <div>
                       <p className="text-[15px] font-medium text-[#0F172A]">{item.action}</p>
-                      {index === 0 && <p className="text-[13px] text-[#64748B] mt-0.5">Approved by Michael Chen</p>}
-                      {index === 2 && <p className="text-[13px] text-[#64748B] mt-0.5">Score: 100%. Certificate added to file.</p>}
+                      {index === 0 && <p className="text-[13px] text-[#64748B] mt-0.5">Captured in employee notes.</p>}
                     </div>
                     <span className="text-[13px] font-medium text-[#94A3B8] whitespace-nowrap">{item.time}</span>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-[13px] text-[#64748B]">No recent activity records available.</p>
+              )}
             </div>
             
             {/* End of timeline indicator */}

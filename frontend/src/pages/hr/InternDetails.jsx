@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,6 +6,7 @@ import {
   X, UploadCloud, FileText, Play, ExternalLink, GraduationCap, 
   CalendarDays, CheckCircle, Clock
 } from 'lucide-react';
+import { hrAPI } from '../../utils/api';
 
 // --- SUB-COMPONENTS ---
 const AssignMaterialModal = ({ isOpen, onClose, internName, onAssign }) => {
@@ -133,28 +134,57 @@ export default function HRInternDetails() {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [intern, setIntern] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Mock Intern Data
+  useEffect(() => {
+    const fetchIntern = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const res = await hrAPI.getIntern(id);
+        setIntern(res.data?.data);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load intern details');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchIntern();
+  }, [id]);
+
+  const getDurationString = (start, end) => {
+    if (!start || !end) return '-';
+    const s = new Date(start);
+    const e = new Date(end);
+    const diffTime = Math.abs(e - s);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const months = Math.round(diffDays / 30);
+    return `${months} Month${months !== 1 ? 's' : ''}`;
+  };
+
+  // Map intern to emp layout structure
   const emp = {
-    id: id || 'INT-001',
-    name: 'Alex Wong',
-    email: 'alex.w@movicloudlabs.com',
-    phone: '+1 (555) 123-4567',
-    university: 'Massachusetts Institute of Technology',
-    major: 'Computer Science',
-    department: 'Engineering',
-    designation: 'Software Engineering Intern',
-    type: 'Intern',
-    status: 'Active',
-    joined: 'Jan 10, 2024',
-    endDate: 'Jul 10, 2024',
-    duration: '6 Months',
-    mentor: 'Sarah Jenkins',
-    hrRepresentative: 'Amanda Reed',
-    location: 'San Francisco, CA (HQ)',
+    id: intern?.employeeId || '-',
+    name: intern?.name || 'Intern',
+    email: intern?.email || '',
+    phone: intern?.phone || '-',
+    university: intern?.college || 'N/A',
+    major: intern?.designation || '-',
+    department: intern?.department?.name || '-',
+    designation: intern?.designation || 'Intern',
+    type: intern?.employmentType || 'Intern',
+    status: intern?.status || 'Active',
+    joined: intern?.internshipStart ? new Date(intern.internshipStart).toLocaleDateString() : '-',
+    endDate: intern?.internshipEnd ? new Date(intern.internshipEnd).toLocaleDateString() : '-',
+    duration: getDurationString(intern?.internshipStart, intern?.internshipEnd),
+    mentor: intern?.mentor?.name || 'Unassigned',
+    hrRepresentative: intern?.hrManager?.name || 'Unassigned',
+    location: intern?.address || 'N/A',
     stipend: '$5,000 / month',
-    leaveBalance: '5 Days (Pro-rated)',
-    sickLeave: '3 Days'
+    leaveBalance: intern?.leaveBalance ? `${intern.leaveBalance.casual?.total - intern.leaveBalance.casual?.used} Days` : '0 Days',
+    sickLeave: intern?.leaveBalance ? `${intern.leaveBalance.sick?.total - intern.leaveBalance.sick?.used} Days` : '0 Days'
   };
 
   const activityHistory = [
@@ -198,6 +228,24 @@ export default function HRInternDetails() {
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center items-center h-96">
+          <span className="material-symbols-outlined text-[32px] text-[#2563EB] animate-spin">sync</span>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageWrapper>
+        <div className="p-8 text-center text-[#DC2626] font-medium">{error}</div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

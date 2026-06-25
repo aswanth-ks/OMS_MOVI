@@ -130,9 +130,7 @@ export default function HRAddEmployee() {
                   <div className="relative">
                     <select className="w-full border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-[14px] bg-white focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-colors appearance-none cursor-pointer">
                       <option value="employee">Employee</option>
-                      <option value="admin">Administrator</option>
-                      <option value="hr">HR Manager</option>
-                      <option value="pmo">PMO Manager</option>
+                      <option value="intern">Intern</option>
                     </select>
                     <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] pointer-events-none text-[18px]">expand_more</span>
                   </div>

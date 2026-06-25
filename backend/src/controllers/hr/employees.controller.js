@@ -17,10 +17,10 @@ export const getEmployees = async (req, res, next) => {
     // Exclude interns
     filter.employmentType = { $ne: 'Intern' };
     
-    // Exclude admins and super-admins
-    const adminRoles = await Role.find({ slug: { $in: ['admin', 'super-admin'] } });
-    const adminRoleIds = adminRoles.map(r => r._id);
-    filter.role = { $nin: adminRoleIds };
+    // Exclude admin, super-admin, pmo-lead, and hr-manager roles
+    const restrictedRoles = await Role.find({ slug: { $in: ['admin', 'super-admin', 'pmo-lead', 'hr-manager'] } });
+    const restrictedRoleIds = restrictedRoles.map(r => r._id);
+    filter.role = { $nin: restrictedRoleIds };
 
     if (search) {
       filter.$or = [

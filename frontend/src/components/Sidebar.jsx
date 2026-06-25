@@ -39,8 +39,6 @@ const NAV_CONFIG = {
     { to: '/hr/onboarding', icon: 'person_add', label: 'Onboarding' },
     { to: '/hr/attendance', icon: 'event_available', label: 'Attendance' },
     { to: '/hr/performance', icon: 'grade', label: 'Performance' },
-    { to: '/hr/tasks', icon: 'view_kanban', label: 'Task Board' },
-    { to: '/hr/tasks/new', icon: CheckSquare, label: 'Assign Task', isLucide: true },
     { to: '/hr/profile', icon: User, label: 'My Profile', isLucide: true },
   ],
   pmo: [

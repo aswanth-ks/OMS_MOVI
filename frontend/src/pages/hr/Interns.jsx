@@ -1,15 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import PageWrapper from '../../components/PageWrapper';
-
-// --- MOCK DATA ---
-const MOCK_INTERNS = [
-  { id: 'INT-001', name: 'Alex Wong', email: 'alex.w@movicloudlabs.com', university: 'MIT', major: 'Computer Science', mentor: 'Sarah Jenkins', duration: '6 Months', joinDate: '2024-01-10', status: 'Active', avatar: 'A', assignedHR: 'HR' },
-  { id: 'INT-002', name: 'Jessica Pearson', email: 'jessica.p@movicloudlabs.com', university: 'Stanford', major: 'Data Science', mentor: 'Michael Chang', duration: '3 Months', joinDate: '2024-03-01', status: 'Active', avatar: 'J', assignedHR: 'HR' },
-  { id: 'INT-003', name: 'Brian OConner', email: 'brian.o@movicloudlabs.com', university: 'UCLA', major: 'Business Admin', mentor: 'David Kim', duration: '12 Months', joinDate: '2023-09-15', status: 'Graduated', avatar: 'B', assignedHR: 'ARUN' },
-  { id: 'INT-004', name: 'Mia Toretto', email: 'mia.t@movicloudlabs.com', university: 'Berkeley', major: 'Graphic Design', mentor: 'Michael Chang', duration: '6 Months', joinDate: '2024-05-01', status: 'Onboarding', avatar: 'M', assignedHR: 'HR' },
-];
+import { hrAPI } from '../../utils/api';
 
 const STATUS_COLORS = {
   'Active': 'bg-[#16A34A]/10 text-[#16A34A]',
@@ -19,29 +11,63 @@ const STATUS_COLORS = {
 };
 
 export default function HRInterns() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUniversity, setFilterUniversity] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [interns, setInterns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Only show interns assigned to the logged-in HR user
-  const myInterns = MOCK_INTERNS.filter(emp => !user?.name || emp.assignedHR.toLowerCase() === user.name.toLowerCase());
+  useEffect(() => {
+    const loadInterns = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const response = await hrAPI.getInterns({ page: 1, limit: 500 });
+        setInterns(response.data?.data || []);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load intern records');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInterns();
+  }, []);
+
+  const initialsFor = (name = '') => name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('') || '?';
+
+  const getDurationString = (start, end) => {
+    if (!start || !end) return '-';
+    const s = new Date(start);
+    const e = new Date(end);
+    const diffTime = Math.abs(e - s);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const months = Math.round(diffDays / 30);
+    return `${months} Month${months !== 1 ? 's' : ''}`;
+  };
 
   // Derived unique lists for filters
-  const universities = [...new Set(myInterns.map(e => e.university))];
-  const statuses = [...new Set(myInterns.map(e => e.status))];
+  const universities = useMemo(() => [...new Set(interns.map(e => e.college).filter(Boolean))], [interns]);
+  const statuses = useMemo(() => [...new Set(interns.map(e => e.status).filter(Boolean))], [interns]);
 
   // Filter logic
-  const filteredInterns = myInterns.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          emp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          emp.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesUniv = filterUniversity ? emp.university === filterUniversity : true;
+  const filteredInterns = useMemo(() => interns.filter(emp => {
+    const id = emp.employeeId || '';
+    const matchesSearch = emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesUniv = filterUniversity ? emp.college === filterUniversity : true;
     const matchesStatus = filterStatus ? emp.status === filterStatus : true;
     
     return matchesSearch && matchesUniv && matchesStatus;
-  });
+  }), [interns, filterUniversity, filterStatus, searchTerm]);
 
   return (
     <PageWrapper>
@@ -111,6 +137,17 @@ export default function HRInterns() {
 
         {/* TABLE VIEW */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm overflow-hidden flex-1">
+          {loading && (
+            <div className="px-4 py-12 text-center text-[14px] text-[#64748B]">Loading intern records...</div>
+          )}
+
+          {!loading && error && (
+            <div className="px-4 py-12 text-center">
+              <p className="text-[14px] font-medium text-[#DC2626]">{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
@@ -128,15 +165,15 @@ export default function HRInterns() {
                 {filteredInterns.length > 0 ? (
                   filteredInterns.map((emp) => (
                     <tr 
-                      key={emp.id} 
+                      key={emp._id} 
                       className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors last:border-0 cursor-pointer"
-                      onClick={() => navigate(`/hr/interns/${emp.id}`)}
+                      onClick={() => navigate(`/hr/interns/${emp._id}`)}
                     >
                       {/* Avatar + Name + Email */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-[#E2E8F0] text-[#64748B] flex items-center justify-center font-bold text-[12px] shrink-0">
-                            {emp.avatar}
+                            {initialsFor(emp.name)}
                           </div>
                           <div>
                             <div className="text-[14px] font-medium text-[#0F172A]">{emp.name}</div>
@@ -147,32 +184,38 @@ export default function HRInterns() {
 
                       {/* ID */}
                       <td className="px-4 py-3 text-[13px] font-mono text-[#64748B]">
-                        {emp.id}
+                        {emp.employeeId || '-'}
                       </td>
 
                       {/* Education */}
                       <td className="px-4 py-3">
-                        <div className="text-[13px] font-medium text-[#0F172A]">{emp.university}</div>
-                        <div className="text-[12px] text-[#64748B] mt-0.5">{emp.major}</div>
+                        <div className="text-[13px] font-medium text-[#0F172A]">{emp.college || '-'}</div>
+                        <div className="text-[12px] text-[#64748B] mt-0.5">{emp.designation || '-'}</div>
                       </td>
 
                       {/* Mentor */}
                       <td className="px-4 py-3">
-                        <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#F1F5F9] rounded-md border border-[#E2E8F0]">
-                          <span className="material-symbols-outlined text-[14px] text-[#64748B]">person</span>
-                          <span className="text-[12px] font-medium text-[#0F172A]">{emp.mentor}</span>
-                        </div>
+                        {emp.mentor ? (
+                          <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#F1F5F9] rounded-md border border-[#E2E8F0]">
+                            <span className="material-symbols-outlined text-[14px] text-[#64748B]">person</span>
+                            <span className="text-[12px] font-medium text-[#0F172A]">{emp.mentor.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[12px] text-[#94A3B8] italic">Unassigned</span>
+                        )}
                       </td>
 
                       {/* Duration */}
                       <td className="px-4 py-3 text-[13px] text-[#64748B]">
-                        <span className="font-medium text-[#0F172A]">{emp.duration}</span>
-                        <div className="text-[11px] mt-0.5">Started: {new Date(emp.joinDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
+                        <span className="font-medium text-[#0F172A]">{getDurationString(emp.internshipStart, emp.internshipEnd)}</span>
+                        <div className="text-[11px] mt-0.5">
+                          Started: {emp.internshipStart ? new Date(emp.internshipStart).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '-'}
+                        </div>
                       </td>
 
                       {/* Status */}
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${STATUS_COLORS[emp.status]}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${STATUS_COLORS[emp.status] || 'bg-slate-100 text-slate-700'}`}>
                           {emp.status}
                         </span>
                       </td>
@@ -181,7 +224,7 @@ export default function HRInterns() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                           <button 
-                            onClick={() => navigate(`/hr/interns/${emp.id}`)}
+                            onClick={() => navigate(`/hr/interns/${emp._id}`)}
                             className="text-[#64748B] hover:text-[#2563EB] transition-colors"
                             title="View Progress"
                           >
@@ -211,6 +254,7 @@ export default function HRInterns() {
               </tbody>
             </table>
           </div>
+          )}
           
           {/* Pagination Footer */}
           <div className="px-4 py-3 border-t border-[#E2E8F0] bg-white flex items-center justify-between">
