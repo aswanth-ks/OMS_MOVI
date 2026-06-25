@@ -113,8 +113,14 @@ export const adminAPI = {
 
   // Settings
   getSettings: () => api.get('/admin/settings'),
-  updateSettings: (data) => api.put('/admin/settings', data),
   saveSettings: (data) => api.put('/admin/settings', data),
+  updateSettings: (data) => api.put('/admin/settings', data),
+  resetSettings: () => api.post('/admin/settings/reset'),
+  testEmail: () => api.post('/admin/settings/test-email'),
+  uploadLogo: (formData) =>
+    api.post('/admin/settings/upload-logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };
 
 // ─── HR API ───────────────────────────────────────────────────────────────
