@@ -1,890 +1,860 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
-  SlidersHorizontal, Shield, Bell, Palette, Database, Globe, Server,
-  AlertTriangle, CheckCircle, EyeOff, ShieldCheck, Mail, ImagePlus,
-  Download, Plus, Key, RefreshCw
+  SlidersHorizontal, Shield, Bell, Palette, Server,
+  Save, CheckCircle2, AlertTriangle, ChevronLeft,
+  Eye, EyeOff, Upload, Mail, Lock, RefreshCw,
+  AlertCircle, X,
 } from 'lucide-react';
-import PageWrapper from '../../components/PageWrapper';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/shared/AccessDenied';
 
-// ── Shared UI primitives ──────────────────────────────────────────────────────
-
-const Toast = ({ show }) => (
-  <AnimatePresence>
-    {show && (
-      <motion.div
-        initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 100, opacity: 0 }}
-        transition={{ duration: 0.25 }}
-        className="fixed top-4 right-4 z-[100] bg-[#16A34A] text-white rounded-lg px-4 py-2.5 flex items-center gap-2 shadow-lg"
-      >
-        <CheckCircle size={16} />
-        <span className="text-[13px] font-medium">Settings saved successfully</span>
-      </motion.div>
-    )}
-  </AnimatePresence>
+// ─── Primitive: Toggle ────────────────────────────────────────────────────────
+const Toggle = ({ checked, onChange, disabled }) => (
+  <button
+    type="button"
+    onClick={() => !disabled && onChange(!checked)}
+    disabled={disabled}
+    className={`relative inline-flex shrink-0 rounded-full transition-colors duration-150 focus:outline-none
+      ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+    style={{ width: 36, height: 20, background: checked ? '#2563EB' : '#CBD5E1' }}
+  >
+    <span
+      className="inline-block rounded-full bg-white shadow-sm transition-transform duration-150"
+      style={{ width: 14, height: 14, margin: 3, transform: checked ? 'translateX(16px)' : 'translateX(0)' }}
+    />
+  </button>
 );
 
-const TabNav = ({ tabs, activeTab, setActiveTab, isDirty }) => (
-  <div className="w-52 min-w-[208px] bg-[#F8FAFC] border-r border-[#E2E8F0] p-2.5 flex flex-col gap-1 shrink-0">
-    <div className="text-[10px] font-semibold text-[#94A3B8] tracking-widest px-2.5 py-1.5 mb-0.5">CONFIGURATION</div>
-    <div className="flex-1 space-y-0.5">
-      {tabs.map(({ id, label, icon: Icon }) => (
-        <button key={id} onClick={() => setActiveTab(id)}
-          className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-[13px] ${
-            activeTab === id ? 'bg-[#EFF6FF] text-[#2563EB] font-medium' : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-          }`}
-        >
-          <Icon size={15} />
-          <span className="flex-1 text-left">{label}</span>
-          {isDirty && activeTab === id && <div className="w-1.5 h-1.5 rounded-full bg-[#D97706] shrink-0" />}
-        </button>
-      ))}
-    </div>
-    <div className="border-t border-[#E2E8F0] mt-2 pt-2 mx-1">
-      <div className="bg-[#FEF3C7] border border-[#FDE68A] rounded-lg p-2.5 flex items-start gap-1.5">
-        <AlertTriangle size={12} className="text-[#D97706] shrink-0 mt-0.5" />
-        <p className="text-[11px] text-[#92400E] leading-snug">Security and System changes take effect immediately.</p>
-      </div>
-    </div>
-  </div>
+// ─── Primitive: Input ─────────────────────────────────────────────────────────
+const Input = ({ error, className = '', ...props }) => (
+  <input
+    className={`border rounded-md px-2.5 py-1.5 text-[13px] text-[#0F172A] bg-white
+      focus:outline-none focus:ring-1 transition-colors
+      ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+               : 'border-[#D1D5DB] focus:border-[#2563EB] focus:ring-blue-100'}
+      disabled:bg-[#F8FAFC] disabled:text-[#94A3B8] disabled:cursor-not-allowed
+      ${className}`}
+    {...props}
+  />
 );
 
-const Section = ({ title, description, children, isDanger = false }) => (
-  <div className={isDanger ? 'border border-[#DC2626] rounded-xl p-4 bg-[#FEF2F2]/30' : ''}>
-    <h3 className={`text-[13px] font-semibold mb-0.5 ${isDanger ? 'text-[#DC2626]' : 'text-[#0F172A]'}`}>{title}</h3>
-    {description && <p className="text-[12px] text-[#64748B] mb-3">{description}</p>}
-    <div className="space-y-4">{children}</div>
-  </div>
-);
-
-const Divider = () => <div className="border-t border-[#E2E8F0] my-5" />;
-
-const Field = ({ label, helper, warning, error, children }) => (
-  <div>
-    <label className="block text-[12px] font-medium text-[#0F172A] mb-1">{label}</label>
+// ─── Primitive: Select ────────────────────────────────────────────────────────
+const Sel = ({ error, children, className = '', ...props }) => (
+  <select
+    className={`border rounded-md px-2.5 py-1.5 text-[13px] text-[#0F172A] bg-white
+      focus:outline-none focus:ring-1 transition-colors
+      ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+               : 'border-[#D1D5DB] focus:border-[#2563EB] focus:ring-blue-100'}
+      disabled:bg-[#F8FAFC] disabled:text-[#94A3B8] disabled:cursor-not-allowed
+      ${className}`}
+    {...props}
+  >
     {children}
-    {helper && !error && <p className="text-[11px] text-[#64748B] mt-1">{helper}</p>}
-    {error && <p className="text-[11px] text-[#DC2626] mt-1 font-medium">{error}</p>}
-    {warning && !error && (
-      <div className="mt-1.5 bg-[#FEF3C7] border border-[#FDE68A] rounded p-1.5 text-[11px] text-[#92400E]">{warning}</div>
-    )}
+  </select>
+);
+
+// ─── Primitive: Section heading inside a card ─────────────────────────────────
+const SectionHead = ({ title, desc }) => (
+  <div className="mb-4 pb-3 border-b border-[#F1F5F9]">
+    <p className="text-[13px] font-semibold text-[#0F172A]">{title}</p>
+    {desc && <p className="text-[11px] text-[#94A3B8] mt-0.5">{desc}</p>}
   </div>
 );
 
-const Toggle = ({ label, description, checked, onChange, isDanger = false }) => (
-  <div className="flex items-center justify-between gap-4">
-    <div className="min-w-0">
-      <div className="text-[13px] font-medium text-[#0F172A] leading-snug">{label}</div>
-      {description && <div className="text-[11px] text-[#64748B] mt-0.5">{description}</div>}
+// ─── Primitive: Row (label left, control right) ───────────────────────────────
+const Row = ({ label, helper, error, children, col = false }) => (
+  <div className={`${col ? 'flex flex-col gap-1' : 'flex items-start justify-between gap-6'} py-2.5 border-b border-[#F9FAFB] last:border-0`}>
+    <div className={col ? '' : 'w-48 shrink-0'}>
+      <p className="text-[13px] font-medium text-[#374151]">{label}</p>
+      {helper && <p className="text-[11px] text-[#9CA3AF] mt-0.5 leading-snug">{helper}</p>}
+      {error  && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
     </div>
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
-        checked ? (isDanger ? 'bg-[#DC2626]' : 'bg-[#2563EB]') : 'bg-[#CBD5E1]'
-      }`}
-    >
-      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${checked ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-    </button>
+    <div className={col ? 'w-full' : 'flex-1 flex flex-col gap-1'}>{children}</div>
   </div>
 );
 
-const inputCls = 'w-full border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB] bg-white';
-const selectCls = inputCls;
-const inputErrCls = 'w-full border border-[#DC2626] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#DC2626] bg-white';
+// ─── Primitive: Toggle row ────────────────────────────────────────────────────
+const ToggleRow = ({ label, sub, checked, onChange, disabled }) => (
+  <div className="flex items-center justify-between py-2.5 border-b border-[#F9FAFB] last:border-0">
+    <div>
+      <p className="text-[13px] text-[#374151]">{label}</p>
+      {sub && <p className="text-[11px] text-[#9CA3AF] mt-0.5">{sub}</p>}
+    </div>
+    <Toggle checked={!!checked} onChange={onChange} disabled={disabled} />
+  </div>
+);
 
-// ── Default state (matches schema defaults exactly) ────────────────────────────
+// ─── Primitive: Segment buttons ───────────────────────────────────────────────
+const Seg = ({ options, value, onChange, disabled }) => (
+  <div className="inline-flex rounded-md border border-[#D1D5DB] overflow-hidden">
+    {options.map(o => (
+      <button
+        key={o.value}
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && onChange(o.value)}
+        className={`px-3 py-1.5 text-[12px] font-medium transition-colors border-r border-[#D1D5DB] last:border-0
+          ${value === o.value
+            ? 'bg-[#2563EB] text-white'
+            : 'bg-white text-[#6B7280] hover:bg-[#F3F4F6]'}
+          ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        {o.label}
+      </button>
+    ))}
+  </div>
+);
 
-const DEFAULTS = {
-  // General
-  appName: 'Office Workspace Management System', appShortName: 'OWMS',
-  appUrl: 'https://owms.movicloudlabs.com', orgName: 'Movi Cloud Labs',
-  orgDomain: 'movicloudlabs.com', timezone: '(GMT+05:30) Chennai, Mumbai, New Delhi',
-  dateFormat: 'DD/MM/YYYY', timeFormat: '24-hour', language: 'English (US)',
-  currency: 'INR', itemsPerPage: 25, defaultDashboard: 'Overview', sidebarDefault: 'Expanded',
-  // Security
-  minPasswordLength: 12, requireUppercase: true, requireLowercase: true,
-  requireNumbers: true, requireSpecial: true, passwordExpiry: false,
-  passwordExpiryDays: 90, passwordHistory: true, passwordHistoryCount: 5,
-  sessionTimeout: '1 hour', maxConcurrentSessions: 3, rememberMe: true, rememberMeDays: 30,
-  twoFactorPolicy: 'Optional', twoFactorMethods: { totp: true, email: true, sms: false },
-  maxFailedLogins: 5, lockoutDuration: '15 min', ipAllowlist: false,
-  ipAllowlistRanges: '192.168.1.0/24\n10.0.0.0/8',
-  // Notifications
-  smtpHost: 'smtp.gmail.com', smtpPort: 587, smtpUser: '', smtpPass: '',
-  smtpEncryption: 'TLS', fromEmail: 'noreply@movicloudlabs.com', fromName: 'OWMS Notifications',
-  notifyNewUser: true, notifyDeactivated: true, notifyFailedLogin: true,
-  notifyPermissionChange: true, notifyReportGenerated: false, notifySystemErrors: true,
-  notifyAuditExport: false, notifyNewDept: false, dailyDigest: false,
-  dailyDigestTime: '08:00', weeklySummary: false, weeklySummaryDay: 'Monday',
-  // Branding
-  primaryColor: '#2563EB', accentColor: '#0F172A', loginTitle: 'Welcome to OWMS',
-  loginSubtitle: 'Office Workspace Management System', showLogoOnLogin: true, loginBgStyle: 'Solid Color',
-  // Data
-  activityLogsRetention: '1 year', auditLogsRetention: '2 years',
-  reportFilesRetention: '90 days', deletedRecords: 'Keep for 30 days',
-  autoBackup: false, backupFrequency: 'Daily', backupTime: '02:00', backupRetention: 7,
-  // System
-  maintenanceMode: false, maintenanceMessage: 'System is under maintenance. Please check back later.',
-  apiEnabled: true, apiRateLimit: 100,
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const previewDate = (fmt) => {
+  const d = new Date(), dd = String(d.getDate()).padStart(2,'0'),
+    mm = String(d.getMonth()+1).padStart(2,'0'), yyyy = d.getFullYear(),
+    mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  return fmt === 'DD/MM/YYYY' ? `${dd}/${mm}/${yyyy}`
+    : fmt === 'MM/DD/YYYY'   ? `${mm}/${dd}/${yyyy}`
+    : fmt === 'YYYY-MM-DD'   ? `${yyyy}-${mm}-${dd}`
+    : `${dd} ${mon} ${yyyy}`;
 };
 
-// Flatten a nested settings document from the API into a single-level state object
-const flattenSettings = (d) => ({
-  ...(d.general      || {}),
-  ...(d.security     || {}),
-  twoFactorMethods: { ...DEFAULTS.twoFactorMethods, ...(d.security?.twoFactorMethods || {}) },
-  ...(d.notifications || {}),
-  ...(d.branding     || {}),
-  ...(d.data         || {}),
-  ...(d.system       || {}),
-});
+const ZONES = [
+  ['Asia/Kolkata','(GMT+05:30) India Standard Time'],
+  ['UTC','(GMT+00:00) UTC'],
+  ['America/New_York','(GMT-05:00) Eastern Time'],
+  ['America/Chicago','(GMT-06:00) Central Time'],
+  ['America/Los_Angeles','(GMT-08:00) Pacific Time'],
+  ['Europe/London','(GMT+00:00) London'],
+  ['Europe/Paris','(GMT+01:00) Paris / Berlin'],
+  ['Asia/Dubai','(GMT+04:00) Dubai'],
+  ['Asia/Singapore','(GMT+08:00) Singapore'],
+  ['Asia/Tokyo','(GMT+09:00) Tokyo'],
+  ['Australia/Sydney','(GMT+11:00) Sydney'],
+];
 
-// ── Main component ─────────────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+const Skeleton = () => (
+  <div className="flex bg-white rounded-lg border border-[#E5E7EB] min-h-[500px]">
+    <div className="w-44 bg-[#F9FAFB] border-r border-[#E5E7EB] p-3">
+      {[...Array(5)].map((_,i) => (
+        <div key={i} className="h-8 bg-[#E5E7EB] rounded mb-1.5 animate-pulse"/>
+      ))}
+    </div>
+    <div className="flex-1 p-6 space-y-3">
+      {[...Array(8)].map((_,i) => (
+        <div key={i} className={`h-3 bg-[#F3F4F6] rounded animate-pulse ${i%4===3?'w-1/3 mb-4':'w-full'}`}/>
+      ))}
+    </div>
+  </div>
+);
 
-export default function AdminSettings() {
-  const [activeTab, setActiveTab] = useState('general');
-  const [isDirty, setIsDirty]     = useState(false);
-  const [lastSaved, setLastSaved] = useState('Not saved yet');
-  const [showToast, setShowToast] = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [errors, setErrors]       = useState({});
+// ─── Danger Modal ─────────────────────────────────────────────────────────────
+const DangerModal = ({ action, onCancel, onConfirm, loading }) => {
+  const [text, setText] = useState('');
+  const ref = useRef(null);
+  useEffect(() => { setTimeout(() => ref.current?.focus(), 60); }, []);
 
-  const [s, setS] = useState(DEFAULTS);
-
-  // Single updater — all tabs share one state object; switching tabs never loses edits
-  const set = (key, val) => {
-    setS(prev => ({ ...prev, [key]: val }));
-    setIsDirty(true);
-    if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
-  };
-
-  const fetchSettings = async () => {
-    try {
-      const res = await adminAPI.getSettings();
-      const d = res.data?.data;
-      if (d) setS({ ...DEFAULTS, ...flattenSettings(d) });
-    } catch {
-      // keep defaults on failure
-    }
-  };
-
-  useEffect(() => { fetchSettings(); }, []);
-
-  const validate = () => {
-    const errs = {};
-    const len = Number(s.minPasswordLength);
-    if (isNaN(len) || len < 6 || len > 32) {
-      errs.minPasswordLength = 'Must be a number between 6 and 32';
-    }
-    const rateLimit = Number(s.apiRateLimit);
-    if (isNaN(rateLimit) || rateLimit < 1) {
-      errs.apiRateLimit = 'Must be a positive number';
-    }
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!validate()) return;
-    setSaving(true);
-    try {
-      await adminAPI.updateSettings({
-        general: {
-          appName: s.appName, appShortName: s.appShortName, appUrl: s.appUrl,
-          orgName: s.orgName, orgDomain: s.orgDomain, timezone: s.timezone,
-          dateFormat: s.dateFormat, timeFormat: s.timeFormat, language: s.language,
-          currency: s.currency, itemsPerPage: s.itemsPerPage,
-          defaultDashboard: s.defaultDashboard, sidebarDefault: s.sidebarDefault,
-        },
-        security: {
-          minPasswordLength: Number(s.minPasswordLength),
-          requireUppercase: s.requireUppercase, requireLowercase: s.requireLowercase,
-          requireNumbers: s.requireNumbers, requireSpecial: s.requireSpecial,
-          passwordExpiry: s.passwordExpiry, passwordExpiryDays: Number(s.passwordExpiryDays),
-          passwordHistory: s.passwordHistory, passwordHistoryCount: Number(s.passwordHistoryCount),
-          sessionTimeout: s.sessionTimeout, maxConcurrentSessions: Number(s.maxConcurrentSessions),
-          rememberMe: s.rememberMe, rememberMeDays: Number(s.rememberMeDays),
-          twoFactorPolicy: s.twoFactorPolicy,
-          twoFactorMethods: { totp: s.twoFactorMethods.totp, email: s.twoFactorMethods.email, sms: s.twoFactorMethods.sms },
-          maxFailedLogins: Number(s.maxFailedLogins), lockoutDuration: s.lockoutDuration,
-          ipAllowlist: s.ipAllowlist, ipAllowlistRanges: s.ipAllowlistRanges,
-        },
-        notifications: {
-          smtpHost: s.smtpHost, smtpPort: Number(s.smtpPort),
-          smtpUser: s.smtpUser, smtpPass: s.smtpPass, smtpEncryption: s.smtpEncryption,
-          fromEmail: s.fromEmail, fromName: s.fromName,
-          notifyNewUser: s.notifyNewUser, notifyDeactivated: s.notifyDeactivated,
-          notifyFailedLogin: s.notifyFailedLogin, notifyPermissionChange: s.notifyPermissionChange,
-          notifyReportGenerated: s.notifyReportGenerated, notifySystemErrors: s.notifySystemErrors,
-          notifyAuditExport: s.notifyAuditExport, notifyNewDept: s.notifyNewDept,
-          dailyDigest: s.dailyDigest, dailyDigestTime: s.dailyDigestTime,
-          weeklySummary: s.weeklySummary, weeklySummaryDay: s.weeklySummaryDay,
-        },
-        branding: {
-          primaryColor: s.primaryColor, accentColor: s.accentColor,
-          loginTitle: s.loginTitle, loginSubtitle: s.loginSubtitle,
-          showLogoOnLogin: s.showLogoOnLogin, loginBgStyle: s.loginBgStyle,
-        },
-        data: {
-          activityLogsRetention: s.activityLogsRetention,
-          auditLogsRetention: s.auditLogsRetention,
-          reportFilesRetention: s.reportFilesRetention,
-          deletedRecords: s.deletedRecords,
-          autoBackup: s.autoBackup, backupFrequency: s.backupFrequency,
-          backupTime: s.backupTime, backupRetention: Number(s.backupRetention),
-        },
-        system: {
-          maintenanceMode: s.maintenanceMode, maintenanceMessage: s.maintenanceMessage,
-          apiEnabled: s.apiEnabled, apiRateLimit: Number(s.apiRateLimit),
-        },
-      });
-      // Re-fetch from backend to confirm what was actually persisted
-      await fetchSettings();
-      setIsDirty(false);
-      const now = new Date();
-      setLastSaved(`Today at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
-    } catch {
-      // keep dirty state so user can retry
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDiscard = async () => {
-    await fetchSettings();
-    setIsDirty(false);
-    setErrors({});
-  };
-
-  const tabs = [
-    { id: 'general',       label: 'General',       icon: SlidersHorizontal },
-    { id: 'security',      label: 'Security',       icon: Shield },
-    { id: 'notifications', label: 'Notifications',  icon: Bell },
-    { id: 'branding',      label: 'Branding',       icon: Palette },
-    { id: 'data',          label: 'Data & Storage', icon: Database },
-    { id: 'integrations',  label: 'Integrations',   icon: Globe },
-    { id: 'system',        label: 'System',         icon: Server },
-  ];
+  const cfg = {
+    'factory-reset':    { title: 'Reset to factory defaults?', body: 'All settings (SMTP, branding, security, system) will be permanently restored to defaults. User data is not affected.', btn: 'Reset Settings' },
+    'reset-passwords':  { title: 'Force password reset for all users?', body: 'Every user will be required to set a new password on next login.', btn: 'Reset Passwords' },
+  }[action] || {};
 
   return (
-    <PageWrapper>
-      <div className="flex flex-col h-full bg-[#F8FAFC]">
-        <Toast show={showToast} />
-
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-[#E2E8F0] bg-white flex items-center justify-between shrink-0">
-          <div>
-            <h1 className="text-xl font-semibold text-[#0F172A]">Settings</h1>
-            <p className="text-[12px] text-[#64748B] mt-0.5">Configure global application parameters, security policies, and system behavior.</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.14 }}
+        className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6"
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+            <AlertTriangle size={18} className="text-red-500"/>
           </div>
-          <div className="flex items-center gap-1.5 text-[12px] text-[#64748B]">
-            <CheckCircle size={14} className="text-[#16A34A]" />
-            Last saved: {lastSaved}
-          </div>
+          <p className="text-[14px] font-semibold text-[#0F172A]">{cfg.title}</p>
         </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-hidden p-5">
-          <div className="bg-white rounded-xl border border-[#E2E8F0] h-full flex overflow-hidden shadow-sm">
-
-            <TabNav tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} isDirty={isDirty} />
-
-            {/* Tab content */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 pb-24">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -6 }}
-                  transition={{ duration: 0.15 }}
-                  className="max-w-2xl"
-                >
-
-                  {/* ── GENERAL ─────────────────────────────────────────────── */}
-                  {activeTab === 'general' && (
-                    <>
-                      <Section title="Application Identity" description="Basic information identifying this application instance.">
-                        <Field label="Application Name">
-                          <input type="text" value={s.appName} onChange={e => set('appName', e.target.value)} className={inputCls} />
-                        </Field>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Short Name / Acronym" helper="Used in browser tabs and compact areas">
-                            <input type="text" value={s.appShortName} onChange={e => set('appShortName', e.target.value)} className={inputCls} />
-                          </Field>
-                          <Field label="Application URL">
-                            <input type="url" value={s.appUrl} onChange={e => set('appUrl', e.target.value)} className={inputCls} />
-                          </Field>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Organization Name">
-                            <input type="text" value={s.orgName} onChange={e => set('orgName', e.target.value)} className={inputCls} />
-                          </Field>
-                          <Field label="Organization Domain" helper="Used for email validation during onboarding">
-                            <input type="text" value={s.orgDomain} onChange={e => set('orgDomain', e.target.value)} className={inputCls} />
-                          </Field>
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Localization">
-                        <Field label="Timezone">
-                          <select value={s.timezone} onChange={e => set('timezone', e.target.value)} className={selectCls}>
-                            <option>(GMT+05:30) Chennai, Mumbai, New Delhi</option>
-                            <option>(GMT+00:00) London</option>
-                            <option>(GMT-05:00) Eastern Time (US &amp; Canada)</option>
-                            <option>(GMT-08:00) Pacific Time (US &amp; Canada)</option>
-                          </select>
-                        </Field>
-                        <div className="grid grid-cols-3 gap-4">
-                          <Field label="Date Format">
-                            <select value={s.dateFormat} onChange={e => set('dateFormat', e.target.value)} className={selectCls}>
-                              {['MM/DD/YYYY','DD/MM/YYYY','YYYY-MM-DD','DD MMM YYYY'].map(f => <option key={f}>{f}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Time Format">
-                            <select value={s.timeFormat} onChange={e => set('timeFormat', e.target.value)} className={selectCls}>
-                              <option value="12-hour">12-hour (AM/PM)</option>
-                              <option value="24-hour">24-hour</option>
-                            </select>
-                          </Field>
-                          <Field label="Language">
-                            <select value={s.language} onChange={e => set('language', e.target.value)} className={selectCls}>
-                              {['English (US)','English (UK)','Spanish','French','German'].map(l => <option key={l}>{l}</option>)}
-                            </select>
-                          </Field>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Currency" helper="Used in financial reports">
-                            <select value={s.currency} onChange={e => set('currency', e.target.value)} className={selectCls}>
-                              {['USD','EUR','GBP','INR','JPY'].map(c => <option key={c}>{c}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Items Per Page">
-                            <select value={s.itemsPerPage} onChange={e => set('itemsPerPage', Number(e.target.value))} className={selectCls}>
-                              {[10,25,50,100].map(n => <option key={n} value={n}>{n}</option>)}
-                            </select>
-                          </Field>
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Display Preferences">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Default Dashboard View">
-                            <select value={s.defaultDashboard} onChange={e => set('defaultDashboard', e.target.value)} className={selectCls}>
-                              {['Overview','Analytics','Activity Feed'].map(v => <option key={v}>{v}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Sidebar Default State">
-                            <select value={s.sidebarDefault} onChange={e => set('sidebarDefault', e.target.value)} className={selectCls}>
-                              <option>Expanded</option>
-                              <option>Collapsed</option>
-                            </select>
-                          </Field>
-                        </div>
-                      </Section>
-                    </>
-                  )}
-
-                  {/* ── SECURITY ────────────────────────────────────────────── */}
-                  {activeTab === 'security' && (
-                    <>
-                      <Section title="Password Policy" description="Define requirements for all user passwords.">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Minimum Length" helper="Recommended: 12+" error={errors.minPasswordLength}>
-                            <input
-                              type="number" min="6" max="32"
-                              value={s.minPasswordLength}
-                              onChange={e => set('minPasswordLength', e.target.value)}
-                              className={errors.minPasswordLength ? inputErrCls : inputCls}
-                            />
-                          </Field>
-                          <Field label="Complexity">
-                            <div className="border border-[#E2E8F0] rounded-lg p-3 bg-[#F8FAFC] space-y-2.5">
-                              <Toggle label="Uppercase letters" checked={s.requireUppercase} onChange={v => set('requireUppercase', v)} />
-                              <Toggle label="Lowercase letters" checked={s.requireLowercase} onChange={v => set('requireLowercase', v)} />
-                              <Toggle label="Numbers"           checked={s.requireNumbers}   onChange={v => set('requireNumbers', v)} />
-                              <Toggle label="Special characters" checked={s.requireSpecial}  onChange={v => set('requireSpecial', v)} />
-                            </div>
-                          </Field>
-                        </div>
-                        <div className="space-y-3">
-                          <Toggle label="Enable password expiry" checked={s.passwordExpiry} onChange={v => set('passwordExpiry', v)} />
-                          {s.passwordExpiry && (
-                            <div className="pl-4 border-l-2 border-[#E2E8F0] ml-1">
-                              <Field label="Expire after (days)">
-                                <input type="number" value={s.passwordExpiryDays} onChange={e => set('passwordExpiryDays', e.target.value)} className="w-24 border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]" />
-                              </Field>
-                            </div>
-                          )}
-                          <Toggle label="Prevent reuse of previous passwords" checked={s.passwordHistory} onChange={v => set('passwordHistory', v)} />
-                          {s.passwordHistory && (
-                            <div className="pl-4 border-l-2 border-[#E2E8F0] ml-1">
-                              <Field label="Cannot reuse last (n) passwords">
-                                <input type="number" value={s.passwordHistoryCount} onChange={e => set('passwordHistoryCount', e.target.value)} className="w-24 border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]" />
-                              </Field>
-                            </div>
-                          )}
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Session Management">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Session Timeout" helper="Auto-logout after inactivity" warning={s.sessionTimeout === 'Never' ? 'Never is not recommended for security' : null}>
-                            <select value={s.sessionTimeout} onChange={e => set('sessionTimeout', e.target.value)} className={selectCls}>
-                              {['15 min','30 min','1 hour','2 hours','4 hours','8 hours','Never'].map(o => <option key={o}>{o}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Max Concurrent Sessions" helper="Devices a user can be logged in from">
-                            <input type="number" value={s.maxConcurrentSessions} onChange={e => set('maxConcurrentSessions', e.target.value)} className={inputCls} />
-                          </Field>
-                        </div>
-                        <Toggle label="Allow Remember Me across browser sessions" description="Users can stay logged in" checked={s.rememberMe} onChange={v => set('rememberMe', v)} />
-                        {s.rememberMe && (
-                          <div className="pl-4 border-l-2 border-[#E2E8F0] ml-1">
-                            <Field label="Remember Me duration (days)">
-                              <input type="number" value={s.rememberMeDays} onChange={e => set('rememberMeDays', e.target.value)} className="w-24 border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]" />
-                            </Field>
-                          </div>
-                        )}
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Two-Factor Authentication">
-                        <Field label="2FA Policy">
-                          <div className="grid grid-cols-3 gap-2 mt-1">
-                            {[
-                              { val: 'Disabled', icon: EyeOff,    label: 'Disabled', desc: 'No 2FA required' },
-                              { val: 'Optional', icon: Shield,     label: 'Optional', desc: "User's choice" },
-                              { val: 'Required', icon: ShieldCheck, label: 'Required', desc: 'All users must set up' },
-                            ].map(({ val, icon: Icon, label, desc }) => (
-                              <div key={val} onClick={() => set('twoFactorPolicy', val)}
-                                className={`border rounded-lg p-3 cursor-pointer transition-colors text-center ${
-                                  s.twoFactorPolicy === val
-                                    ? val === 'Required' ? 'border-[#DC2626] bg-[#FEF2F2]' : 'border-[#2563EB] bg-[#EFF6FF]'
-                                    : 'border-[#E2E8F0] hover:border-[#CBD5E1]'
-                                }`}
-                              >
-                                <Icon size={18} className={`mx-auto mb-1 ${s.twoFactorPolicy === val ? (val === 'Required' ? 'text-[#DC2626]' : 'text-[#2563EB]') : 'text-[#64748B]'}`} />
-                                <div className={`text-[12px] font-semibold ${s.twoFactorPolicy === val ? (val === 'Required' ? 'text-[#DC2626]' : 'text-[#2563EB]') : 'text-[#0F172A]'}`}>{label}</div>
-                                <div className="text-[11px] text-[#64748B] mt-0.5">{desc}</div>
-                              </div>
-                            ))}
-                          </div>
-                          {s.twoFactorPolicy === 'Required' && (
-                            <p className="text-[11px] text-[#DC2626] mt-1.5 font-medium">All users will be forced to set up 2FA on next login.</p>
-                          )}
-                        </Field>
-                        <Field label="Allowed 2FA Methods">
-                          <div className="flex gap-5 mt-1">
-                            {[['totp','Authenticator App'],['email','Email OTP'],['sms','SMS OTP']].map(([k,lbl]) => (
-                              <label key={k} className="flex items-center gap-1.5 text-[13px] text-[#0F172A] cursor-pointer">
-                                <input type="checkbox" checked={s.twoFactorMethods[k]}
-                                  onChange={e => set('twoFactorMethods', { ...s.twoFactorMethods, [k]: e.target.checked })}
-                                  className="w-3.5 h-3.5 text-[#2563EB] border-[#CBD5E1] rounded" />
-                                {lbl}
-                              </label>
-                            ))}
-                          </div>
-                        </Field>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Login &amp; Access">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Max Failed Login Attempts" helper="Account locks after this many failures">
-                            <input type="number" value={s.maxFailedLogins} onChange={e => set('maxFailedLogins', e.target.value)} className={inputCls} />
-                          </Field>
-                          <Field label="Account Lockout Duration">
-                            <select value={s.lockoutDuration} onChange={e => set('lockoutDuration', e.target.value)} className={selectCls}>
-                              {['5 min','15 min','30 min','1 hour','Until admin unlocks'].map(o => <option key={o}>{o}</option>)}
-                            </select>
-                          </Field>
-                        </div>
-                        <Toggle label="Restrict access to specific IP ranges" description="IP Allowlist" checked={s.ipAllowlist} onChange={v => set('ipAllowlist', v)} />
-                        {s.ipAllowlist && (
-                          <div className="pl-4 border-l-2 border-[#E2E8F0] ml-1">
-                            <Field label="IP Ranges (one per line)">
-                              <textarea rows={3} value={s.ipAllowlistRanges} onChange={e => set('ipAllowlistRanges', e.target.value)} className={`${inputCls} font-mono`} />
-                            </Field>
-                          </div>
-                        )}
-                      </Section>
-                    </>
-                  )}
-
-                  {/* ── NOTIFICATIONS ────────────────────────────────────────── */}
-                  {activeTab === 'notifications' && (
-                    <>
-                      <Section title="Email / SMTP">
-                        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-4 space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <Field label="SMTP Host">
-                              <input type="text" placeholder="smtp.gmail.com" value={s.smtpHost} onChange={e => set('smtpHost', e.target.value)} className={inputCls} />
-                            </Field>
-                            <Field label="SMTP Port">
-                              <input type="number" value={s.smtpPort} onChange={e => set('smtpPort', e.target.value)} className={inputCls} />
-                            </Field>
-                            <Field label="Username">
-                              <input type="text" value={s.smtpUser} onChange={e => set('smtpUser', e.target.value)} className={inputCls} />
-                            </Field>
-                            <Field label="Password">
-                              <input type="password" value={s.smtpPass} onChange={e => set('smtpPass', e.target.value)} className={inputCls} />
-                            </Field>
-                            <Field label="Encryption">
-                              <select value={s.smtpEncryption} onChange={e => set('smtpEncryption', e.target.value)} className={selectCls}>
-                                <option>None</option><option>TLS</option><option>SSL</option>
-                              </select>
-                            </Field>
-                          </div>
-                          <button type="button" className="flex items-center gap-1.5 text-[13px] font-medium text-[#2563EB] hover:text-blue-700 transition-colors">
-                            <Mail size={14} /> Send Test Email
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="From Email">
-                            <input type="email" value={s.fromEmail} onChange={e => set('fromEmail', e.target.value)} className={inputCls} />
-                          </Field>
-                          <Field label="From Name">
-                            <input type="text" value={s.fromName} onChange={e => set('fromName', e.target.value)} className={inputCls} />
-                          </Field>
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="System Event Notifications" description="Which events trigger email alerts to admins.">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-                          <Toggle label="New User Created"      checked={s.notifyNewUser}          onChange={v => set('notifyNewUser', v)} />
-                          <Toggle label="User Deactivated"      checked={s.notifyDeactivated}      onChange={v => set('notifyDeactivated', v)} />
-                          <Toggle label="Failed Login Attempts" checked={s.notifyFailedLogin}      onChange={v => set('notifyFailedLogin', v)} />
-                          <Toggle label="Permission Changes"    checked={s.notifyPermissionChange} onChange={v => set('notifyPermissionChange', v)} />
-                          <Toggle label="Report Generated"      checked={s.notifyReportGenerated}  onChange={v => set('notifyReportGenerated', v)} />
-                          <Toggle label="System Errors"         checked={s.notifySystemErrors}     onChange={v => set('notifySystemErrors', v)} />
-                          <Toggle label="Audit Log Exports"     checked={s.notifyAuditExport}      onChange={v => set('notifyAuditExport', v)} />
-                          <Toggle label="New Department Created" checked={s.notifyNewDept}         onChange={v => set('notifyNewDept', v)} />
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Digest Emails">
-                        <Toggle label="Daily Digest" description="Send daily summary to admins" checked={s.dailyDigest} onChange={v => set('dailyDigest', v)} />
-                        {s.dailyDigest && (
-                          <div className="pl-4 border-l-2 border-[#E2E8F0] ml-1">
-                            <Field label="Send at">
-                              <input type="time" value={s.dailyDigestTime} onChange={e => set('dailyDigestTime', e.target.value)} className="w-32 border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]" />
-                            </Field>
-                          </div>
-                        )}
-                        <Toggle label="Weekly Summary" description="Send weekly activity report" checked={s.weeklySummary} onChange={v => set('weeklySummary', v)} />
-                        {s.weeklySummary && (
-                          <div className="pl-4 border-l-2 border-[#E2E8F0] ml-1">
-                            <Field label="Send on">
-                              <select value={s.weeklySummaryDay} onChange={e => set('weeklySummaryDay', e.target.value)} className="w-36 border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]">
-                                {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => <option key={d}>{d}</option>)}
-                              </select>
-                            </Field>
-                          </div>
-                        )}
-                      </Section>
-                    </>
-                  )}
-
-                  {/* ── BRANDING ─────────────────────────────────────────────── */}
-                  {activeTab === 'branding' && (
-                    <>
-                      <Section title="Visual Identity">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Application Logo">
-                            <div className="border border-dashed border-[#E2E8F0] rounded-xl p-6 text-center flex flex-col items-center bg-[#F8FAFC]">
-                              <ImagePlus className="text-[#94A3B8] mb-2" size={24} />
-                              <span className="text-[12px] font-medium text-[#0F172A] mb-0.5">Upload Logo</span>
-                              <span className="text-[11px] text-[#64748B] mb-3">SVG/PNG · Max 2MB · 200×50px</span>
-                              <button type="button" className="text-[12px] font-medium text-[#2563EB] hover:text-blue-700">Browse Files</button>
-                            </div>
-                          </Field>
-                          <Field label="Favicon">
-                            <div className="border border-dashed border-[#E2E8F0] rounded-xl p-6 text-center flex flex-col items-center bg-[#F8FAFC] h-full justify-center">
-                              <ImagePlus className="text-[#94A3B8] mb-2" size={20} />
-                              <span className="text-[11px] text-[#64748B] mb-3">ICO/PNG · 32×32px</span>
-                              <button type="button" className="text-[12px] font-medium text-[#2563EB] hover:text-blue-700">Browse Files</button>
-                            </div>
-                          </Field>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Primary Color" helper="Buttons, active states, links">
-                            <div className="flex items-center gap-2">
-                              <input type="color" value={s.primaryColor} onChange={e => set('primaryColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0 p-0" />
-                              <input type="text" value={s.primaryColor} onChange={e => set('primaryColor', e.target.value)} className="w-28 border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]" />
-                              <span style={{ backgroundColor: s.primaryColor }} className="text-white text-[11px] px-2.5 py-1 rounded font-medium">Preview</span>
-                            </div>
-                          </Field>
-                          <Field label="Accent Color">
-                            <div className="flex items-center gap-2">
-                              <input type="color" value={s.accentColor} onChange={e => set('accentColor', e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0 p-0" />
-                              <input type="text" value={s.accentColor} onChange={e => set('accentColor', e.target.value)} className="w-28 border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]" />
-                            </div>
-                          </Field>
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Login Page">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Title">
-                            <input type="text" value={s.loginTitle} onChange={e => set('loginTitle', e.target.value)} className={inputCls} />
-                          </Field>
-                          <Field label="Subtitle">
-                            <input type="text" value={s.loginSubtitle} onChange={e => set('loginSubtitle', e.target.value)} className={inputCls} />
-                          </Field>
-                        </div>
-                        <Toggle label="Show Organization Logo on Login" checked={s.showLogoOnLogin} onChange={v => set('showLogoOnLogin', v)} />
-                        <Field label="Background Style">
-                          <div className="flex gap-3 mt-1">
-                            {['Solid Color','Gradient','Image'].map(style => (
-                              <button key={style} type="button" onClick={() => set('loginBgStyle', style)}
-                                className={`flex-1 border rounded-lg py-2 text-[12px] font-medium transition-colors ${s.loginBgStyle === style ? 'border-[#2563EB] bg-[#EFF6FF] text-[#2563EB]' : 'border-[#E2E8F0] text-[#64748B] hover:border-[#CBD5E1]'}`}>
-                                {style}
-                              </button>
-                            ))}
-                          </div>
-                        </Field>
-                      </Section>
-                    </>
-                  )}
-
-                  {/* ── DATA & STORAGE ───────────────────────────────────────── */}
-                  {activeTab === 'data' && (
-                    <>
-                      <Section title="Data Retention">
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="User Activity Logs">
-                            <select value={s.activityLogsRetention} onChange={e => set('activityLogsRetention', e.target.value)} className={selectCls}>
-                              {['30 days','90 days','6 months','1 year','2 years','Forever'].map(o => <option key={o}>{o}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Audit Logs" warning="Reducing may affect compliance reporting">
-                            <select value={s.auditLogsRetention} onChange={e => set('auditLogsRetention', e.target.value)} className={selectCls}>
-                              {['30 days','90 days','6 months','1 year','2 years','Forever'].map(o => <option key={o}>{o}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Report Files">
-                            <select value={s.reportFilesRetention} onChange={e => set('reportFilesRetention', e.target.value)} className={selectCls}>
-                              {['7 days','30 days','90 days','1 year','Forever'].map(o => <option key={o}>{o}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Deleted Records">
-                            <select value={s.deletedRecords} onChange={e => set('deletedRecords', e.target.value)} className={selectCls}>
-                              {['Permanently delete','Keep for 30 days','Keep for 90 days','Keep forever'].map(o => <option key={o}>{o}</option>)}
-                            </select>
-                          </Field>
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Backup &amp; Export">
-                        <Toggle label="Enable automatic database backups" checked={s.autoBackup} onChange={v => set('autoBackup', v)} />
-                        {s.autoBackup && (
-                          <div className="pl-4 border-l-2 border-[#E2E8F0] ml-1 grid grid-cols-3 gap-4">
-                            <Field label="Frequency">
-                              <select value={s.backupFrequency} onChange={e => set('backupFrequency', e.target.value)} className={selectCls}>
-                                <option>Daily</option><option>Weekly</option><option>Monthly</option>
-                              </select>
-                            </Field>
-                            <Field label="Time">
-                              <input type="time" value={s.backupTime} onChange={e => set('backupTime', e.target.value)} className={inputCls} />
-                            </Field>
-                            <Field label="Keep (backups)">
-                              <input type="number" value={s.backupRetention} onChange={e => set('backupRetention', e.target.value)} className={inputCls} />
-                            </Field>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-3 pt-1">
-                          <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[#DC2626] text-[#DC2626] hover:bg-[#FEF2F2] rounded-lg text-[13px] font-medium transition-colors">
-                            <Download size={14} /> Export All Data
-                          </button>
-                          <span className="text-[11px] text-[#64748B]">Exports all system data. May take several minutes.</span>
-                        </div>
-                      </Section>
-                    </>
-                  )}
-
-                  {/* ── INTEGRATIONS ─────────────────────────────────────────── */}
-                  {activeTab === 'integrations' && (
-                    <>
-                      <Section title="Connected Services" description="Manage third-party integrations and API connections.">
-                        <div className="space-y-2">
-                          {[
-                            { name: 'Slack',             desc: 'Send notifications to Slack channels',   color: 'bg-purple-100' },
-                            { name: 'Microsoft Teams',   desc: 'Integrate with Teams for alerts',        color: 'bg-indigo-100' },
-                            { name: 'Google Workspace',  desc: 'Sync users with Google Directory',       color: 'bg-blue-100'   },
-                            { name: 'JIRA',              desc: 'Link projects and tasks with JIRA',      color: 'bg-sky-100'    },
-                            { name: 'GitHub',            desc: 'Connect repositories to projects',       color: 'bg-gray-200'   },
-                            { name: 'Zapier',            desc: 'Automate workflows with 5000+ apps',     color: 'bg-orange-100' },
-                          ].map(svc => (
-                            <div key={svc.name} className="border border-[#E2E8F0] rounded-lg px-4 py-3 flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-[13px] text-[#0F172A]/70 ${svc.color}`}>
-                                  {svc.name.charAt(0)}
-                                </div>
-                                <div>
-                                  <div className="text-[13px] font-medium text-[#0F172A]">{svc.name}</div>
-                                  <div className="text-[11px] text-[#64748B]">{svc.desc}</div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Not Connected</span>
-                                <button type="button" className="text-[12px] font-medium text-[#2563EB] hover:text-blue-700">Configure</button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="API Access">
-                        <Toggle label={s.apiEnabled ? 'API Active' : 'API Disabled'} description="Allow external applications via REST API" checked={s.apiEnabled} onChange={v => set('apiEnabled', v)} />
-                        <Field label="Rate Limit" error={errors.apiRateLimit}>
-                          <div className="flex items-center gap-2">
-                            <input type="number"
-                              value={s.apiRateLimit}
-                              onChange={e => set('apiRateLimit', e.target.value)}
-                              className={`w-28 border ${errors.apiRateLimit ? 'border-[#DC2626]' : 'border-[#E2E8F0]'} rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#2563EB]`}
-                            />
-                            <span className="text-[12px] text-[#64748B]">requests / minute</span>
-                          </div>
-                        </Field>
-                        <div className="flex items-center gap-3 pt-1">
-                          <button type="button" className="flex items-center gap-1.5 px-3 py-2 border border-[#E2E8F0] text-[#0F172A] hover:bg-[#F8FAFC] rounded-lg text-[13px] font-medium transition-colors">
-                            <Key size={14} className="text-[#64748B]" /> View API Keys
-                          </button>
-                          <button type="button" className="flex items-center gap-1.5 px-3 py-2 bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg text-[13px] font-medium transition-colors">
-                            <Plus size={14} /> Generate API Key
-                          </button>
-                        </div>
-                      </Section>
-                    </>
-                  )}
-
-                  {/* ── SYSTEM ───────────────────────────────────────────────── */}
-                  {activeTab === 'system' && (
-                    <>
-                      <Section title="System Information">
-                        <div className="bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] p-3">
-                          <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
-                            {[
-                              ['OWMS Version','v2.4.1'], ['Build Number','#20241012-a3f9'],
-                              ['Environment','Production'], ['Node.js','v20.11.0'],
-                              ['Database','MongoDB'], ['Last Deployed','Oct 12, 2024'],
-                              ['Server Region','Asia South (Mumbai)'], ['Uptime','14 days, 6 hours'],
-                            ].map(([k, v]) => (
-                              <div key={k} className="flex items-center justify-between border-b border-[#F1F5F9] pb-2">
-                                <span className="text-[12px] text-[#64748B]">{k}</span>
-                                <span className={`text-[12px] font-medium ${k === 'Environment' ? 'text-[#16A34A]' : 'text-[#0F172A]'} font-mono`}>{v}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Maintenance">
-                        <Toggle label="Maintenance Mode" description="Non-admin users will be locked out" checked={s.maintenanceMode} onChange={v => set('maintenanceMode', v)} isDanger />
-                        {s.maintenanceMode && (
-                          <div className="bg-[#FEE2E2] border border-[#DC2626] rounded-lg p-3">
-                            <p className="text-[12px] font-medium text-[#DC2626] mb-2">⚠ Maintenance mode is ACTIVE.</p>
-                            <Field label="Message shown to locked-out users">
-                              <textarea rows={2} value={s.maintenanceMessage} onChange={e => set('maintenanceMessage', e.target.value)} className={`${inputCls} border-[#DC2626] focus:border-[#DC2626]`} />
-                            </Field>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-3">
-                          <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 border border-[#E2E8F0] text-[#D97706] hover:bg-[#FEF3C7] rounded-lg text-[13px] font-medium transition-colors">
-                            <RefreshCw size={13} /> Clear Cache
-                          </button>
-                          <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 border border-[#E2E8F0] text-[#0F172A] hover:bg-[#F8FAFC] rounded-lg text-[13px] font-medium transition-colors">
-                            <Database size={13} className="text-[#64748B]" /> Re-index Search
-                          </button>
-                        </div>
-                      </Section>
-
-                      <Divider />
-
-                      <Section title="Danger Zone" isDanger>
-                        <div className="space-y-3">
-                          {[
-                            { label: 'Reset All User Passwords', desc: 'Forces all users to reset on next login', btn: 'Reset Passwords' },
-                            { label: 'Clear All Audit Logs', desc: 'Permanently deletes all audit records. Cannot be undone.', btn: 'Clear Audit Logs' },
-                            { label: 'Factory Reset', desc: 'Resets all settings to defaults. User data is preserved.', btn: 'Factory Reset' },
-                          ].map(({ label, desc, btn }) => (
-                            <div key={label} className="flex items-center justify-between border-b border-[#FECACA] pb-3 last:border-0 last:pb-0">
-                              <div>
-                                <div className="text-[13px] font-medium text-[#0F172A]">{label}</div>
-                                <p className="text-[11px] text-[#64748B] mt-0.5">{desc}</p>
-                              </div>
-                              <button type="button" className="px-3 py-1.5 border border-[#DC2626] text-[#DC2626] hover:bg-[#FEF2F2] rounded-lg text-[12px] font-medium transition-colors shrink-0 ml-4">
-                                {btn}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </Section>
-                    </>
-                  )}
-
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
+        <p className="text-[12px] text-[#6B7280] mb-4 leading-relaxed">{cfg.body}</p>
+        <p className="text-[12px] text-[#374151] mb-2">Type <strong>CONFIRM</strong> to proceed:</p>
+        <input
+          ref={ref} value={text} onChange={e => setText(e.target.value)}
+          placeholder="CONFIRM"
+          className="w-full border border-[#D1D5DB] rounded-md px-3 py-2 text-[13px] mb-4 focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
+        />
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCancel} className="px-3 py-1.5 text-[13px] border border-[#D1D5DB] text-[#6B7280] rounded-md hover:bg-[#F9FAFB] transition">Cancel</button>
+          <button
+            onClick={() => text === 'CONFIRM' && !loading && onConfirm()}
+            disabled={text !== 'CONFIRM' || loading}
+            className={`px-3 py-1.5 text-[13px] rounded-md text-white font-medium transition
+              ${text === 'CONFIRM' && !loading ? 'bg-red-600 hover:bg-red-700' : 'bg-red-300 cursor-not-allowed'}`}
+          >
+            {loading ? <span className="flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin"/>Working…</span> : cfg.btn}
+          </button>
         </div>
+      </motion.div>
+    </div>
+  );
+};
 
-        {/* Sticky footer */}
-        <div className="fixed bottom-0 left-52 right-0 bg-white border-t border-[#E2E8F0] px-6 py-3 flex items-center justify-between z-50 shadow-[0_-1px_4px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center gap-2">
-            {isDirty ? (
-              <><div className="w-1.5 h-1.5 rounded-full bg-[#D97706]" /><span className="text-[13px] text-[#D97706] font-medium">Unsaved changes</span></>
-            ) : (
-              <><CheckCircle size={14} className="text-[#16A34A]" /><span className="text-[13px] text-[#64748B]">All changes saved</span></>
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB CONTENT COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── General ──────────────────────────────────────────────────────────────────
+function GeneralTab({ s, upd, err, canEdit }) {
+  return (
+    <div className="space-y-0">
+      <SectionHead title="Application Identity" desc="Names used across the UI, emails, and reports"/>
+      <Row label="Application Name" helper="Browser tab & page header">
+        <Input value={s.appName||''} onChange={e=>upd('appName',e.target.value)} disabled={!canEdit} error={err['general.appName']} className="w-full"/>
+      </Row>
+      <Row label="Organization Name" helper="Used in emails & generated reports">
+        <Input value={s.orgName||''} onChange={e=>upd('orgName',e.target.value)} disabled={!canEdit} className="w-full"/>
+      </Row>
+
+      <div className="pt-4 mt-2">
+        <SectionHead title="Localization" desc="Controls timestamps, date displays, and scheduled reports"/>
+      </div>
+      <Row label="Timezone">
+        <Sel value={s.timezone||'Asia/Kolkata'} onChange={e=>upd('timezone',e.target.value)} disabled={!canEdit} className="w-full">
+          {ZONES.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+        </Sel>
+      </Row>
+      <Row label="Date Format">
+        <div className="flex items-center gap-3">
+          <Sel value={s.dateFormat||'DD/MM/YYYY'} onChange={e=>upd('dateFormat',e.target.value)} disabled={!canEdit}>
+            {['DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD','DD MMM YYYY'].map(f=><option key={f} value={f}>{f}</option>)}
+          </Sel>
+          <span className="text-[11px] text-[#2563EB] font-medium">e.g. {previewDate(s.dateFormat||'DD/MM/YYYY')}</span>
+        </div>
+      </Row>
+      <Row label="Time Format">
+        <Seg
+          options={[{value:'12',label:'12-hour'},{value:'24',label:'24-hour'}]}
+          value={s.timeFormat||'24'} onChange={v=>upd('timeFormat',v)} disabled={!canEdit}
+        />
+      </Row>
+      <Row label="Items Per Page" helper="Default pagination for all list views" error={err['general.itemsPerPage']}>
+        <Seg
+          options={[10,25,50,100].map(n=>({value:n,label:String(n)}))}
+          value={s.itemsPerPage||25} onChange={v=>upd('itemsPerPage',v)} disabled={!canEdit}
+        />
+      </Row>
+    </div>
+  );
+}
+
+// ─── Security ─────────────────────────────────────────────────────────────────
+function SecurityTab({ s, upd, err, canEdit }) {
+  const reqs = [
+    s.requireUppercase && 'uppercase',
+    s.requireLowercase && 'lowercase',
+    s.requireNumbers   && 'numbers',
+    s.requireSpecial   && 'special chars',
+  ].filter(Boolean);
+
+  return (
+    <div>
+      <SectionHead title="Password Policy" desc="Applied when users create or update their password"/>
+      <Row label="Min. Password Length" error={err['security.minPasswordLength']}>
+        <div className="flex items-center gap-3">
+          <input type="range" min={6} max={32} step={1}
+            value={s.minPasswordLength||8}
+            onChange={e=>upd('minPasswordLength',parseInt(e.target.value))}
+            disabled={!canEdit}
+            className="w-36 accent-[#2563EB] disabled:opacity-40"
+          />
+          <span className="text-[13px] font-semibold text-[#2563EB] w-16">{s.minPasswordLength||8} chars</span>
+        </div>
+      </Row>
+      <Row label="Requirements">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+          {[
+            ['requireUppercase','Uppercase (A–Z)'],
+            ['requireLowercase','Lowercase (a–z)'],
+            ['requireNumbers','Numbers (0–9)'],
+            ['requireSpecial','Special (!@#$)'],
+          ].map(([f,l]) => (
+            <label key={f} className="flex items-center gap-2 cursor-pointer select-none">
+              <Toggle checked={!!s[f]} onChange={v=>upd(f,v)} disabled={!canEdit}/>
+              <span className="text-[12px] text-[#374151]">{l}</span>
+            </label>
+          ))}
+        </div>
+        {reqs.length > 0 && (
+          <p className="text-[11px] text-[#6B7280] mt-2 bg-[#F9FAFB] rounded px-2.5 py-1.5 border border-[#E5E7EB]">
+            Password must be ≥{s.minPasswordLength||8} chars and contain {reqs.join(', ')}.
+          </p>
+        )}
+      </Row>
+      <Row label="Password Expiry">
+        <div className="flex items-center gap-3">
+          <Toggle checked={!!s.passwordExpiryEnabled} onChange={v=>upd('passwordExpiryEnabled',v)} disabled={!canEdit}/>
+          <AnimatePresence>
+            {s.passwordExpiryEnabled && (
+              <motion.div initial={{opacity:0,width:0}} animate={{opacity:1,width:'auto'}} exit={{opacity:0,width:0}} className="overflow-hidden">
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <span className="text-[12px] text-[#6B7280]">Expire after</span>
+                  <Input type="number" min={30} max={365} value={s.passwordExpiryDays||90}
+                    onChange={e=>upd('passwordExpiryDays',parseInt(e.target.value))}
+                    disabled={!canEdit} className="w-20"/>
+                  <span className="text-[12px] text-[#6B7280]">days</span>
+                </div>
+              </motion.div>
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            {isDirty && (
-              <button type="button" onClick={handleDiscard}
-                className="text-[13px] font-medium text-[#0F172A] bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] px-4 py-2 rounded-lg transition-colors">
-                Discard
+          </AnimatePresence>
+        </div>
+      </Row>
+
+      <div className="pt-4 mt-2">
+        <SectionHead title="Session & Lockout"/>
+      </div>
+      <Row label="Session Timeout">
+        <div className="flex flex-col gap-1.5">
+          <Sel value={s.sessionTimeout||'1hour'} onChange={e=>upd('sessionTimeout',e.target.value)} disabled={!canEdit} className="w-44">
+            {[['15min','15 minutes'],['30min','30 minutes'],['1hour','1 hour'],['2hours','2 hours'],['4hours','4 hours'],['8hours','8 hours'],['never','Never (not recommended)']].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </Sel>
+          {s.sessionTimeout==='never' && (
+            <p className="text-[11px] text-amber-600 flex items-center gap-1"><AlertTriangle size={11}/>Not recommended for enterprise environments.</p>
+          )}
+        </div>
+      </Row>
+      <Row label="Max Failed Logins" helper="Account locked after N consecutive failures" error={err['security.maxFailedLogins']}>
+        <Input type="number" min={3} max={10} value={s.maxFailedLogins||5}
+          onChange={e=>upd('maxFailedLogins',parseInt(e.target.value))}
+          disabled={!canEdit} className="w-20"/>
+      </Row>
+      <Row label="Lockout Duration">
+        <Sel value={s.lockoutDuration||'15min'} onChange={e=>upd('lockoutDuration',e.target.value)} disabled={!canEdit} className="w-52">
+          {[['5min','5 minutes'],['15min','15 minutes'],['30min','30 minutes'],['1hour','1 hour'],['until_admin_unlock','Until admin unlocks']].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+        </Sel>
+      </Row>
+
+      <div className="pt-4 mt-2">
+        <SectionHead title="Two-Factor Authentication"/>
+      </div>
+      <Row label="2FA Policy" col>
+        <div className="flex gap-2">
+          {[
+            {v:'disabled', icon:<EyeOff size={13}/>, label:'Disabled',  sub:'No 2FA required'},
+            {v:'optional', icon:<Shield  size={13}/>, label:'Optional',  sub:'Users choose'},
+            {v:'required', icon:<Lock    size={13}/>, label:'Required',  sub:'All users must'},
+          ].map(o => {
+            const active = (s.twoFactorPolicy||'optional')===o.v;
+            return (
+              <button key={o.v} type="button" disabled={!canEdit}
+                onClick={()=>canEdit&&upd('twoFactorPolicy',o.v)}
+                className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-lg border text-center transition
+                  ${active?'border-[#2563EB] bg-[#EFF6FF] text-[#2563EB]':'border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]'}
+                  ${!canEdit?'opacity-40 cursor-not-allowed':'cursor-pointer'}`}
+              >
+                {o.icon}
+                <span className="text-[12px] font-medium">{o.label}</span>
+                <span className="text-[10px] opacity-75">{o.sub}</span>
               </button>
-            )}
-            <button type="button"
-              onClick={handleSave}
-              disabled={!isDirty || saving}
-              className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-1.5 ${isDirty ? 'bg-[#2563EB] hover:bg-blue-700 text-white' : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'}`}
-            >
-              {saving && (
-                <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              )}
-              {saving ? 'Saving...' : 'Save Changes'}
+            );
+          })}
+        </div>
+        {s.twoFactorPolicy==='required' && (
+          <p className="text-[11px] text-red-600 mt-2 bg-red-50 border border-red-100 rounded px-2.5 py-1.5 flex items-start gap-1.5">
+            <AlertTriangle size={11} className="mt-0.5 shrink-0"/>
+            All users will be blocked from logging in until they complete 2FA setup.
+          </p>
+        )}
+      </Row>
+    </div>
+  );
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+function NotificationsTab({ s, upd, err, canEdit, userEmail }) {
+  const [showPass, setShowPass] = useState(false);
+  const [testing, setTesting]   = useState(false);
+  const [testRes, setTestRes]   = useState(null);
+
+  const runTest = async () => {
+    setTesting(true); setTestRes(null);
+    try {
+      const r = await adminAPI.testEmail();
+      setTestRes({ ok: true, msg: r.data.message || `Sent to ${userEmail}` });
+      setTimeout(() => setTestRes(null), 5000);
+    } catch(e) {
+      setTestRes({ ok: false, msg: e.response?.data?.message || 'SMTP connection failed.' });
+    } finally { setTesting(false); }
+  };
+
+  return (
+    <div>
+      <SectionHead title="SMTP Configuration" desc="Used to send all system-generated emails"/>
+      <Row label="Host & Port">
+        <div className="flex gap-2">
+          <Input value={s.smtpHost||''} onChange={e=>upd('smtpHost',e.target.value)} disabled={!canEdit} placeholder="smtp.gmail.com" className="flex-1"/>
+          <Input type="number" value={s.smtpPort||587} onChange={e=>upd('smtpPort',parseInt(e.target.value))} disabled={!canEdit} className="w-20"/>
+        </div>
+      </Row>
+      <Row label="Credentials">
+        <div className="flex gap-2">
+          <Input value={s.smtpUser||''} onChange={e=>upd('smtpUser',e.target.value)} disabled={!canEdit} placeholder="SMTP username" className="flex-1"/>
+          <div className="relative flex-1">
+            <Input type={showPass?'text':'password'} value={s.smtpPass||''} onChange={e=>upd('smtpPass',e.target.value)}
+              disabled={!canEdit} placeholder="Leave blank to keep" className="w-full pr-8"/>
+            <button type="button" onClick={()=>setShowPass(p=>!p)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#6B7280]">
+              {showPass?<EyeOff size={13}/>:<Eye size={13}/>}
             </button>
           </div>
         </div>
+      </Row>
+      <Row label="Encryption">
+        <Seg options={[{value:'none',label:'None'},{value:'TLS',label:'TLS'},{value:'SSL',label:'SSL'}]}
+          value={s.smtpEncryption||'TLS'} onChange={v=>upd('smtpEncryption',v)} disabled={!canEdit}/>
+      </Row>
+      <Row label="From">
+        <div className="flex gap-2">
+          <Input type="email" value={s.fromEmail||''} onChange={e=>upd('fromEmail',e.target.value)}
+            disabled={!canEdit} placeholder="noreply@domain.com" error={err['notifications.fromEmail']} className="flex-1"/>
+          <Input value={s.fromName||''} onChange={e=>upd('fromName',e.target.value)}
+            disabled={!canEdit} placeholder="Display name" className="flex-1"/>
+        </div>
+        {err['notifications.fromEmail'] && <p className="text-[11px] text-red-500">{err['notifications.fromEmail']}</p>}
+      </Row>
+      <Row label="Test Connection">
+        {!testRes ? (
+          <button onClick={runTest} disabled={testing||!canEdit}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border border-[#D1D5DB] rounded-md text-[#374151] hover:bg-[#F9FAFB] transition disabled:opacity-40">
+            {testing ? <><RefreshCw size={12} className="animate-spin"/>Sending…</> : <><Mail size={12}/>Send Test Email</>}
+          </button>
+        ) : (
+          <div className={`flex items-center gap-1.5 text-[12px] font-medium ${testRes.ok?'text-green-600':'text-red-500'}`}>
+            {testRes.ok ? <CheckCircle2 size={13}/> : <AlertCircle size={13}/>}
+            {testRes.msg}
+          </div>
+        )}
+      </Row>
 
+      <div className="pt-4 mt-2">
+        <SectionHead title="Event Notifications" desc="Which events trigger admin email alerts"/>
       </div>
-    </PageWrapper>
+      {[
+        ['notifyNewUser',          'New user created',         'When an Admin creates a new user account'],
+        ['notifyUserDeactivated',  'User deactivated',         'When a user account is disabled or removed'],
+        ['notifyFailedLogin',      'Failed login attempts',    'When an account hits 3+ consecutive failures'],
+        ['notifyPermissionChange', 'Permission changes',       'When the Access Matrix is modified'],
+        ['notifySystemError',      'System errors',            'When critical backend errors occur'],
+        ['notifyLeaveRequest',     'Leave requests',           'When employees submit leave requests'],
+        ['notifyReportGenerated',  'Report generated',         'When a scheduled report completes'],
+      ].map(([f,l,sub]) => (
+        <ToggleRow key={f} label={l} sub={sub} checked={!!s[f]} onChange={v=>upd(f,v)} disabled={!canEdit}/>
+      ))}
+    </div>
+  );
+}
+
+// ─── Branding ─────────────────────────────────────────────────────────────────
+function BrandingTab({ s, upd, canEdit }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState(null);
+  const [preview,   setPreview]   = useState(null);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (file.size > 2*1024*1024) { setUploadMsg({ok:false,msg:'Max 2 MB'}); return; }
+    const reader = new FileReader();
+    reader.onload = e => setPreview(e.target.result);
+    reader.readAsDataURL(file);
+    setUploading(true); setUploadMsg(null);
+    try {
+      const fd = new FormData(); fd.append('logo', file);
+      const r = await adminAPI.uploadLogo(fd);
+      upd('logoPath', r.data.data?.logoUrl?.replace('/uploads/avatars/',''));
+      setUploadMsg({ok:true,msg:'Uploaded successfully'});
+    } catch(e) { setUploadMsg({ok:false,msg:e.response?.data?.message||'Upload failed'}); }
+    finally { setUploading(false); }
+  };
+
+  const logoSrc = preview || (s.logoPath ? `/uploads/avatars/${s.logoPath}` : null);
+
+  return (
+    <div>
+      <SectionHead title="Company Logo" desc="Shown in the app header and generated reports"/>
+      <Row label="Logo" col>
+        {logoSrc && (
+          <div className="flex items-center gap-3 mb-3 p-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg">
+            <img src={logoSrc} alt="Logo" className="h-8 object-contain"/>
+            {canEdit && (
+              <button onClick={()=>{upd('logoPath',null);setPreview(null);}}
+                className="text-[11px] text-red-500 hover:text-red-700 ml-auto">Remove</button>
+            )}
+          </div>
+        )}
+        <div onClick={()=>canEdit&&!uploading&&fileRef.current?.click()}
+          className={`border-2 border-dashed border-[#D1D5DB] rounded-lg p-5 text-center transition
+            ${canEdit&&!uploading?'cursor-pointer hover:border-[#2563EB] hover:bg-[#F0F9FF]':'opacity-50 cursor-not-allowed'}`}>
+          {uploading
+            ? <div className="flex flex-col items-center gap-1"><RefreshCw size={18} className="text-[#2563EB] animate-spin"/><p className="text-[11px] text-[#6B7280]">Uploading…</p></div>
+            : <><Upload size={18} className="text-[#9CA3AF] mx-auto mb-1"/><p className="text-[12px] text-[#6B7280]">Click to upload — SVG, PNG, JPG · Max 2 MB</p></>
+          }
+        </div>
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/svg+xml" className="hidden"
+          onChange={e=>handleFile(e.target.files[0])}/>
+        {uploadMsg && <p className={`text-[11px] mt-1.5 ${uploadMsg.ok?'text-green-600':'text-red-500'}`}>{uploadMsg.msg}</p>}
+      </Row>
+
+      <div className="pt-4 mt-2">
+        <SectionHead title="Login Page" desc="Text shown to users on the sign-in screen"/>
+      </div>
+      <Row label="Title">
+        <Input value={s.loginTitle||''} onChange={e=>upd('loginTitle',e.target.value)}
+          disabled={!canEdit} placeholder="Welcome to OWMS" className="w-full"/>
+      </Row>
+      <Row label="Subtitle">
+        <Input value={s.loginSubtitle||''} onChange={e=>upd('loginSubtitle',e.target.value)}
+          disabled={!canEdit} placeholder="Office Workspace Management System" className="w-full"/>
+      </Row>
+      <Row label="Preview" col>
+        <div className="bg-[#1E293B] rounded-lg p-6 text-center">
+          <div className="w-9 h-9 rounded-full bg-[#334155] mx-auto mb-3 flex items-center justify-center">
+            <span className="text-[10px] font-bold text-[#94A3B8]">OW</span>
+          </div>
+          <p className="text-[15px] font-bold text-white mb-1">{s.loginTitle||'Welcome to OWMS'}</p>
+          <p className="text-[11px] text-[#94A3B8]">{s.loginSubtitle||'Office Workspace Management System'}</p>
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── System ───────────────────────────────────────────────────────────────────
+function SystemTab({ s, upd, err, canEdit, isSuperAdmin, onDanger, updatedAt }) {
+  return (
+    <div>
+      <SectionHead title="System Information" desc="Read-only — runtime status of this installation"/>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {[
+          ['Version',      '1.0.0'],
+          ['Platform',     'OWMS — Movi Cloud Labs'],
+          ['API Status',   s.apiEnabled ? 'Active' : 'Disabled'],
+          ['Last Updated', updatedAt ? new Date(updatedAt).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}) : '—'],
+        ].map(([k,v]) => (
+          <div key={k} className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg px-3 py-2.5">
+            <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">{k}</p>
+            <p className={`text-[13px] font-medium mt-0.5 ${k==='API Status'?(s.apiEnabled?'text-green-600':'text-red-500'):'text-[#111827]'}`}>{v}</p>
+          </div>
+        ))}
+      </div>
+
+      <SectionHead title="Maintenance Mode" desc="Temporarily blocks non-admin users from accessing the system"/>
+      <div className={`rounded-lg border p-4 mb-4 transition-colors ${s.maintenanceMode?'bg-red-50 border-red-200':'bg-[#F9FAFB] border-[#E5E7EB]'}`}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            {s.maintenanceMode
+              ? <AlertTriangle size={14} className="text-red-500"/>
+              : <Shield size={14} className="text-green-500"/>}
+            <span className={`text-[13px] font-semibold ${s.maintenanceMode?'text-red-600':'text-[#111827]'}`}>
+              {s.maintenanceMode ? 'Maintenance — ACTIVE' : 'Maintenance — Off'}
+            </span>
+          </div>
+          <Toggle checked={!!s.maintenanceMode} onChange={v=>upd('maintenanceMode',v)} disabled={!canEdit}/>
+        </div>
+        <p className="text-[11px] text-[#6B7280]">
+          {s.maintenanceMode ? 'All non-admin users are blocked.' : 'All users can access normally.'}
+        </p>
+        <AnimatePresence>
+          {s.maintenanceMode && (
+            <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:0.15}} className="overflow-hidden mt-3">
+              <p className="text-[11px] text-[#374151] mb-1.5 font-medium">Message shown to blocked users:</p>
+              <textarea rows={2} value={s.maintenanceMessage||''}
+                onChange={e=>upd('maintenanceMessage',e.target.value)}
+                disabled={!canEdit}
+                placeholder="System is under maintenance. Please check back soon."
+                className="w-full border border-[#D1D5DB] rounded-md px-2.5 py-1.5 text-[12px] text-[#374151] resize-none bg-white
+                  focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-blue-100
+                  disabled:bg-[#F3F4F6] disabled:cursor-not-allowed"/>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <SectionHead title="API Access"/>
+      <ToggleRow label="Enable external API access" sub="Allow third-party systems to call OWMS endpoints"
+        checked={!!s.apiEnabled} onChange={v=>upd('apiEnabled',v)} disabled={!canEdit}/>
+      <AnimatePresence>
+        {s.apiEnabled && (
+          <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:0.15}} className="overflow-hidden">
+            <Row label="Rate Limit" helper="Max requests/min per IP" error={err['system.apiRateLimit']}>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={10} max={1000} value={s.apiRateLimit||100}
+                  onChange={e=>upd('apiRateLimit',parseInt(e.target.value))}
+                  disabled={!canEdit} error={err['system.apiRateLimit']} className="w-24"/>
+                <span className="text-[11px] text-[#9CA3AF]">requests / minute</span>
+              </div>
+            </Row>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="mt-6 border border-red-200 rounded-lg p-4">
+        <div className="flex items-center gap-1.5 mb-1">
+          <AlertTriangle size={13} className="text-red-500"/>
+          <p className="text-[13px] font-semibold text-red-600">Danger Zone</p>
+        </div>
+        <p className="text-[11px] text-[#9CA3AF] mb-4">These actions are irreversible. Proceed with extreme caution.</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[13px] font-medium text-[#111827]">Force Password Reset</p>
+              <p className="text-[11px] text-[#6B7280]">All users must set a new password on next login.</p>
+            </div>
+            <button onClick={()=>onDanger('reset-passwords')} disabled={!canEdit}
+              className="text-[12px] border border-red-300 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 transition disabled:opacity-40 shrink-0 ml-4">
+              Reset Passwords
+            </button>
+          </div>
+          {isSuperAdmin && (
+            <div className="flex items-center justify-between pt-3 border-t border-red-100">
+              <div>
+                <p className="text-[13px] font-medium text-[#111827]">Factory Reset</p>
+                <p className="text-[11px] text-[#6B7280]">Restore all settings to defaults. User data is unaffected.</p>
+              </div>
+              <button onClick={()=>onDanger('factory-reset')} disabled={!canEdit}
+                className="text-[12px] border border-red-300 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 transition disabled:opacity-40 shrink-0 ml-4">
+                Factory Reset
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN PAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+const TABS = [
+  { key: 'general',       label: 'General',       Icon: SlidersHorizontal },
+  { key: 'security',      label: 'Security',      Icon: Shield },
+  { key: 'notifications', label: 'Notifications', Icon: Bell },
+  { key: 'branding',      label: 'Branding',      Icon: Palette },
+  { key: 'system',        label: 'System',        Icon: Server },
+];
+
+export default function Settings() {
+  const navigate = useNavigate();
+  const { hasPermission, user } = useAuth();
+  const canRead      = hasPermission('Settings', 'read');
+  const canEdit      = hasPermission('Settings', 'update');
+  const isSuperAdmin = user?.role?.slug === 'super-admin';
+
+  const [settings,  setSettings]  = useState(null);
+  const [original,  setOriginal]  = useState(null);
+  const [tab,       setTab]       = useState('general');
+  const [dirty,     setDirty]     = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [saveErr,   setSaveErr]   = useState('');
+  const [saved,     setSaved]     = useState(false);
+  const [valErrs,   setValErrs]   = useState({});
+  const [danger,    setDanger]    = useState(null);
+  const [dangerBusy,setDangerBusy]= useState(false);
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!canRead) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await adminAPI.getSettings();
+        setSettings(r.data.data);
+        setOriginal(JSON.parse(JSON.stringify(r.data.data)));
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [canRead]);
+
+  // ── updateField ───────────────────────────────────────────────────────────
+  const updateField = (section, field, value) => {
+    setSettings(p => ({ ...p, [section]: { ...p[section], [field]: value } }));
+    setDirty(true); setSaveErr('');
+    const k = `${section}.${field}`;
+    if (valErrs[k]) setValErrs(p => { const n={...p}; delete n[k]; return n; });
+  };
+  const upd = (section) => (field, value) => updateField(section, field, value);
+
+  // ── Validate ──────────────────────────────────────────────────────────────
+  const validate = () => {
+    const e = {};
+    const { security: s, general: g, system: sys, notifications: n } = settings;
+    if ((s.minPasswordLength??8)<6||(s.minPasswordLength??8)>32)    e['security.minPasswordLength']='Must be 6–32';
+    if ((g.itemsPerPage??25)<10||(g.itemsPerPage??25)>100)           e['general.itemsPerPage']='Must be 10–100';
+    if ((sys.apiRateLimit??100)<10||(sys.apiRateLimit??100)>1000)    e['system.apiRateLimit']='Must be 10–1000';
+    if (n.fromEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(n.fromEmail)) e['notifications.fromEmail']='Invalid email';
+    setValErrs(e);
+    return Object.keys(e).length === 0;
+  };
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!validate()) {
+      const first = Object.keys(valErrs)[0];
+      if (first) setTab(first.split('.')[0]);
+      return;
+    }
+    setSaving(true); setSaveErr('');
+    try {
+      const payload = JSON.parse(JSON.stringify(settings));
+      if (!payload.notifications?.smtpPass) delete payload.notifications.smtpPass;
+      const r = await adminAPI.saveSettings(payload);
+      const d = r.data.data;
+      setSettings(d); setOriginal(JSON.parse(JSON.stringify(d)));
+      setDirty(false); setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setSaveErr(e.response?.data?.message || 'Save failed. Please try again.');
+    } finally { setSaving(false); }
+  };
+
+  // ── Cancel ────────────────────────────────────────────────────────────────
+  const handleCancel = async () => {
+    try {
+      const r = await adminAPI.getSettings();
+      setSettings(r.data.data);
+      setOriginal(JSON.parse(JSON.stringify(r.data.data)));
+    } catch { setSettings(JSON.parse(JSON.stringify(original))); }
+    setDirty(false); setSaveErr(''); setValErrs({});
+  };
+
+  // ── Danger ────────────────────────────────────────────────────────────────
+  const handleDangerConfirm = async () => {
+    setDangerBusy(true);
+    try {
+      if (danger === 'factory-reset') {
+        await adminAPI.resetSettings();
+        const r = await adminAPI.getSettings();
+        const d = r.data.data;
+        setSettings(d); setOriginal(JSON.parse(JSON.stringify(d)));
+        setDirty(false); setSaved(true); setTimeout(() => setSaved(false), 3000);
+      } else {
+        setSaveErr('Force password reset is not yet available.');
+      }
+    } catch(e) { setSaveErr(e.response?.data?.message||'Action failed.'); }
+    finally { setDangerBusy(false); setDanger(null); }
+  };
+
+  // ── Tab state ─────────────────────────────────────────────────────────────
+  const tabDirty = (k) => settings && original && JSON.stringify(settings[k]) !== JSON.stringify(original[k]);
+  const tabErr   = (k) => Object.keys(valErrs).some(e => e.startsWith(k+'.'));
+
+  // ── Guards ────────────────────────────────────────────────────────────────
+  if (!canRead) return <AccessDenied />;
+  if (loading || !settings) return (
+    <div className="p-6">
+      <div className="flex items-center gap-2 text-[13px] text-[#6B7280] mb-5">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1 hover:text-[#111827] transition"><ChevronLeft size={14}/>Back</button>
+        <span className="text-[#D1D5DB]">/</span><span className="text-[#111827] font-medium">Settings</span>
+      </div>
+      <Skeleton/>
+    </div>
+  );
+
+  return (
+    <div className="p-6 pb-20">
+      {/* Breadcrumb / back */}
+      <div className="flex items-center gap-2 text-[13px] text-[#6B7280] mb-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1 hover:text-[#111827] transition font-medium"
+        >
+          <ChevronLeft size={14}/>Back
+        </button>
+        <span className="text-[#D1D5DB]">/</span>
+        <span className="text-[#9CA3AF]">Admin</span>
+        <span className="text-[#D1D5DB]">/</span>
+        <span className="text-[#111827] font-medium">Settings</span>
+      </div>
+
+      {/* Page title row */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-[17px] font-bold text-[#111827]">Settings</h1>
+          <p className="text-[12px] text-[#9CA3AF] mt-0.5">System-wide configuration for your OWMS installation</p>
+        </div>
+        {dirty && (
+          <span className="flex items-center gap-1.5 text-[12px] text-amber-600 font-medium bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"/>
+            Unsaved changes
+          </span>
+        )}
+      </div>
+
+      {/* Main panel */}
+      <div className="bg-white rounded-lg border border-[#E5E7EB] flex overflow-hidden" style={{ minHeight: 560 }}>
+        {/* Left nav */}
+        <div className="w-44 shrink-0 bg-[#F9FAFB] border-r border-[#E5E7EB] p-2.5">
+          <p className="text-[10px] font-semibold text-[#9CA3AF] tracking-widest px-2 py-1.5 mb-1">CONFIGURATION</p>
+          {TABS.map(({ key, label, Icon }) => {
+            const active = tab === key;
+            const hasErr = tabErr(key);
+            const hasDiff = tabDirty(key);
+            return (
+              <button key={key} onClick={() => setTab(key)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-colors text-left mb-0.5
+                  ${active ? 'bg-white border border-[#E5E7EB] text-[#111827] font-medium shadow-sm'
+                           : 'text-[#6B7280] hover:bg-white hover:text-[#111827]'}`}
+              >
+                <Icon size={14} className={active ? 'text-[#2563EB]' : 'text-[#9CA3AF]'}/>
+                <span className="flex-1">{label}</span>
+                {hasErr  && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"/>}
+                {!hasErr && hasDiff && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"/>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <AnimatePresence mode="wait">
+            <motion.div key={tab} initial={{opacity:0,x:6}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-6}} transition={{duration:0.12}}>
+              {tab === 'general'       && <GeneralTab       s={settings.general}       upd={upd('general')}       err={valErrs} canEdit={canEdit}/>}
+              {tab === 'security'      && <SecurityTab      s={settings.security}      upd={upd('security')}      err={valErrs} canEdit={canEdit}/>}
+              {tab === 'notifications' && <NotificationsTab s={settings.notifications} upd={upd('notifications')} err={valErrs} canEdit={canEdit} userEmail={user?.email||''}/>}
+              {tab === 'branding'      && <BrandingTab      s={settings.branding}      upd={upd('branding')}      canEdit={canEdit}/>}
+              {tab === 'system'        && <SystemTab        s={settings.system}        upd={upd('system')}        err={valErrs} canEdit={canEdit} isSuperAdmin={isSuperAdmin} onDanger={setDanger} updatedAt={settings.updatedAt}/>}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E5E7EB] px-6 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0 text-[13px]">
+          {saved    && <span className="flex items-center gap-1.5 text-green-600 font-medium"><CheckCircle2 size={14}/>Saved successfully</span>}
+          {!saved && !dirty && <span className="text-[#9CA3AF]">All settings saved</span>}
+        </div>
+        {saveErr && (
+          <div className="flex items-center gap-1.5 text-[12px] text-red-500 max-w-xs truncate">
+            <AlertCircle size={13} className="shrink-0"/>
+            <span className="truncate">{saveErr}</span>
+            <button onClick={()=>setSaveErr('')}><X size={12}/></button>
+          </div>
+        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={handleCancel} disabled={!dirty}
+            className="px-3 py-1.5 text-[13px] border border-[#D1D5DB] text-[#6B7280] rounded-md hover:bg-[#F9FAFB] transition disabled:opacity-40 disabled:cursor-not-allowed">
+            Discard
+          </button>
+          <button onClick={handleSave} disabled={!dirty||saving||!canEdit}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-[13px] font-medium text-white rounded-md transition
+              ${dirty&&!saving&&canEdit ? 'bg-[#2563EB] hover:bg-[#1D4ED8]' : 'bg-[#94A3B8] cursor-not-allowed'}`}>
+            {saving ? <><RefreshCw size={12} className="animate-spin"/>Saving…</> : <><Save size={12}/>Save Changes</>}
+          </button>
+        </div>
+      </div>
+
+      {danger && (
+        <DangerModal action={danger} onCancel={()=>setDanger(null)} onConfirm={handleDangerConfirm} loading={dangerBusy}/>
+      )}
+    </div>
   );
 }
