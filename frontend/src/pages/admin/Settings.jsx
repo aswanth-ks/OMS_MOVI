@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   SlidersHorizontal, Shield, Bell, Palette, Server,
-  Save, CheckCircle2, AlertTriangle,
+  Save, CheckCircle2, AlertTriangle, ChevronLeft,
   Eye, EyeOff, Upload, Mail, Lock, RefreshCw,
   AlertCircle, X,
 } from 'lucide-react';
@@ -10,72 +11,43 @@ import { adminAPI } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import AccessDenied from '../../components/shared/AccessDenied';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const C = {
-  blue:    '#2563EB',
-  dark:    '#0F172A',
-  gray:    '#64748B',
-  lgray:   '#F8FAFC',
-  border:  '#E2E8F0',
-  green:   '#16A34A',
-  red:     '#DC2626',
-  amber:   '#D97706',
-};
-
-// ─── Toggle Switch ────────────────────────────────────────────────────────────
+// ─── Primitive: Toggle ────────────────────────────────────────────────────────
 const Toggle = ({ checked, onChange, disabled }) => (
   <button
     type="button"
     onClick={() => !disabled && onChange(!checked)}
     disabled={disabled}
-    className={`relative inline-flex items-center rounded-full transition-colors duration-150 focus:outline-none shrink-0
-      ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
-    `}
-    style={{ width: 44, height: 24, background: checked ? C.blue : C.border }}
+    className={`relative inline-flex shrink-0 rounded-full transition-colors duration-150 focus:outline-none
+      ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+    style={{ width: 36, height: 20, background: checked ? '#2563EB' : '#CBD5E1' }}
   >
     <span
-      className="inline-block rounded-full bg-white shadow transition-transform duration-150"
-      style={{ width: 18, height: 18, transform: checked ? 'translateX(22px)' : 'translateX(3px)' }}
+      className="inline-block rounded-full bg-white shadow-sm transition-transform duration-150"
+      style={{ width: 14, height: 14, margin: 3, transform: checked ? 'translateX(16px)' : 'translateX(0)' }}
     />
   </button>
 );
 
-// ─── Field wrapper ────────────────────────────────────────────────────────────
-const Field = ({ label, helper, error, children, required }) => (
-  <div className="mb-5 last:mb-0">
-    {label && (
-      <label className="block text-sm font-medium text-[#0F172A] mb-1.5">
-        {label}{required && <span className="text-[#DC2626] ml-0.5">*</span>}
-      </label>
-    )}
-    {children}
-    {error  && <p className="text-xs text-[#DC2626] mt-1">{error}</p>}
-    {helper && !error && <p className="text-xs text-[#64748B] mt-1">{helper}</p>}
-  </div>
-);
-
-// ─── Input ────────────────────────────────────────────────────────────────────
+// ─── Primitive: Input ─────────────────────────────────────────────────────────
 const Input = ({ error, className = '', ...props }) => (
   <input
-    className={`bg-white border rounded-lg px-3 py-2 text-sm text-[#0F172A] w-full
-      focus:outline-none focus:ring-1 transition
-      ${error
-        ? 'border-[#DC2626] focus:border-[#DC2626] focus:ring-[#DC2626]'
-        : 'border-[#E2E8F0] focus:border-[#2563EB] focus:ring-[#2563EB]'}
+    className={`border rounded-md px-2.5 py-1.5 text-[13px] text-[#0F172A] bg-white
+      focus:outline-none focus:ring-1 transition-colors
+      ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+               : 'border-[#D1D5DB] focus:border-[#2563EB] focus:ring-blue-100'}
       disabled:bg-[#F8FAFC] disabled:text-[#94A3B8] disabled:cursor-not-allowed
       ${className}`}
     {...props}
   />
 );
 
-// ─── Select ───────────────────────────────────────────────────────────────────
-const Select = ({ error, children, className = '', ...props }) => (
+// ─── Primitive: Select ────────────────────────────────────────────────────────
+const Sel = ({ error, children, className = '', ...props }) => (
   <select
-    className={`bg-white border rounded-lg px-3 py-2 text-sm text-[#0F172A] w-full
-      focus:outline-none focus:ring-1 transition
-      ${error
-        ? 'border-[#DC2626] focus:border-[#DC2626] focus:ring-[#DC2626]'
-        : 'border-[#E2E8F0] focus:border-[#2563EB] focus:ring-[#2563EB]'}
+    className={`border rounded-md px-2.5 py-1.5 text-[13px] text-[#0F172A] bg-white
+      focus:outline-none focus:ring-1 transition-colors
+      ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+               : 'border-[#D1D5DB] focus:border-[#2563EB] focus:ring-blue-100'}
       disabled:bg-[#F8FAFC] disabled:text-[#94A3B8] disabled:cursor-not-allowed
       ${className}`}
     {...props}
@@ -84,872 +56,608 @@ const Select = ({ error, children, className = '', ...props }) => (
   </select>
 );
 
-// ─── Section card ─────────────────────────────────────────────────────────────
-const Card = ({ title, subtitle, children, className = '' }) => (
-  <div className={`bg-white rounded-xl border border-[#E2E8F0] p-6 mb-6 ${className}`}>
-    {title && <h3 className="text-sm font-semibold text-[#0F172A] mb-0.5">{title}</h3>}
-    {subtitle && <p className="text-xs text-[#64748B] mb-5">{subtitle}</p>}
-    {!title && !subtitle ? children : <div className={title || subtitle ? 'mt-4' : ''}>{children}</div>}
+// ─── Primitive: Section heading inside a card ─────────────────────────────────
+const SectionHead = ({ title, desc }) => (
+  <div className="mb-4 pb-3 border-b border-[#F1F5F9]">
+    <p className="text-[13px] font-semibold text-[#0F172A]">{title}</p>
+    {desc && <p className="text-[11px] text-[#94A3B8] mt-0.5">{desc}</p>}
   </div>
 );
 
-// ─── Segment button group ─────────────────────────────────────────────────────
-const SegmentGroup = ({ options, value, onChange, disabled }) => (
-  <div className="flex rounded-lg overflow-hidden border border-[#E2E8F0]">
-    {options.map(opt => (
-      <button
-        key={opt.value}
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && onChange(opt.value)}
-        className={`flex-1 px-3 py-2 text-sm font-medium transition-colors
-          ${value === opt.value
-            ? 'bg-[#2563EB] text-white'
-            : 'bg-white text-[#64748B] hover:bg-[#F8FAFC]'}
-          ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
-        `}
-      >
-        {opt.label}
-      </button>
-    ))}
+// ─── Primitive: Row (label left, control right) ───────────────────────────────
+const Row = ({ label, helper, error, children, col = false }) => (
+  <div className={`${col ? 'flex flex-col gap-1' : 'flex items-start justify-between gap-6'} py-2.5 border-b border-[#F9FAFB] last:border-0`}>
+    <div className={col ? '' : 'w-48 shrink-0'}>
+      <p className="text-[13px] font-medium text-[#374151]">{label}</p>
+      {helper && <p className="text-[11px] text-[#9CA3AF] mt-0.5 leading-snug">{helper}</p>}
+      {error  && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
+    </div>
+    <div className={col ? 'w-full' : 'flex-1 flex flex-col gap-1'}>{children}</div>
   </div>
 );
 
-// ─── Toggle row ───────────────────────────────────────────────────────────────
-const ToggleRow = ({ label, sub, checked, onChange, disabled, border = true }) => (
-  <div className={`flex items-center justify-between py-3 ${border ? 'border-b border-[#F1F5F9] last:border-0' : ''}`}>
+// ─── Primitive: Toggle row ────────────────────────────────────────────────────
+const ToggleRow = ({ label, sub, checked, onChange, disabled }) => (
+  <div className="flex items-center justify-between py-2.5 border-b border-[#F9FAFB] last:border-0">
     <div>
-      <p className="text-sm text-[#0F172A]">{label}</p>
-      {sub && <p className="text-xs text-[#64748B] mt-0.5">{sub}</p>}
+      <p className="text-[13px] text-[#374151]">{label}</p>
+      {sub && <p className="text-[11px] text-[#9CA3AF] mt-0.5">{sub}</p>}
     </div>
     <Toggle checked={!!checked} onChange={onChange} disabled={disabled} />
   </div>
 );
 
+// ─── Primitive: Segment buttons ───────────────────────────────────────────────
+const Seg = ({ options, value, onChange, disabled }) => (
+  <div className="inline-flex rounded-md border border-[#D1D5DB] overflow-hidden">
+    {options.map(o => (
+      <button
+        key={o.value}
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && onChange(o.value)}
+        className={`px-3 py-1.5 text-[12px] font-medium transition-colors border-r border-[#D1D5DB] last:border-0
+          ${value === o.value
+            ? 'bg-[#2563EB] text-white'
+            : 'bg-white text-[#6B7280] hover:bg-[#F3F4F6]'}
+          ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        {o.label}
+      </button>
+    ))}
+  </div>
+);
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const formatDatePreview = (fmt) => {
-  const d = new Date();
-  const dd  = String(d.getDate()).padStart(2, '0');
-  const mm  = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if (fmt === 'DD/MM/YYYY')  return `${dd}/${mm}/${yyyy}`;
-  if (fmt === 'MM/DD/YYYY')  return `${mm}/${dd}/${yyyy}`;
-  if (fmt === 'YYYY-MM-DD')  return `${yyyy}-${mm}-${dd}`;
-  if (fmt === 'DD MMM YYYY') return `${dd} ${months[d.getMonth()]} ${yyyy}`;
-  return '';
+const previewDate = (fmt) => {
+  const d = new Date(), dd = String(d.getDate()).padStart(2,'0'),
+    mm = String(d.getMonth()+1).padStart(2,'0'), yyyy = d.getFullYear(),
+    mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  return fmt === 'DD/MM/YYYY' ? `${dd}/${mm}/${yyyy}`
+    : fmt === 'MM/DD/YYYY'   ? `${mm}/${dd}/${yyyy}`
+    : fmt === 'YYYY-MM-DD'   ? `${yyyy}-${mm}-${dd}`
+    : `${dd} ${mon} ${yyyy}`;
 };
 
-const TIMEZONES = [
-  { value: 'Asia/Kolkata',        label: '(GMT+05:30) Chennai, Mumbai, New Delhi' },
-  { value: 'UTC',                  label: '(GMT+00:00) UTC' },
-  { value: 'America/New_York',     label: '(GMT-05:00) Eastern Time' },
-  { value: 'America/Chicago',      label: '(GMT-06:00) Central Time' },
-  { value: 'America/Los_Angeles',  label: '(GMT-08:00) Pacific Time' },
-  { value: 'Europe/London',        label: '(GMT+00:00) London' },
-  { value: 'Europe/Paris',         label: '(GMT+01:00) Paris, Berlin' },
-  { value: 'Europe/Moscow',        label: '(GMT+03:00) Moscow' },
-  { value: 'Asia/Dubai',           label: '(GMT+04:00) Dubai' },
-  { value: 'Asia/Singapore',       label: '(GMT+08:00) Singapore, KL' },
-  { value: 'Asia/Tokyo',           label: '(GMT+09:00) Tokyo' },
-  { value: 'Australia/Sydney',     label: '(GMT+11:00) Sydney' },
+const ZONES = [
+  ['Asia/Kolkata','(GMT+05:30) India Standard Time'],
+  ['UTC','(GMT+00:00) UTC'],
+  ['America/New_York','(GMT-05:00) Eastern Time'],
+  ['America/Chicago','(GMT-06:00) Central Time'],
+  ['America/Los_Angeles','(GMT-08:00) Pacific Time'],
+  ['Europe/London','(GMT+00:00) London'],
+  ['Europe/Paris','(GMT+01:00) Paris / Berlin'],
+  ['Asia/Dubai','(GMT+04:00) Dubai'],
+  ['Asia/Singapore','(GMT+08:00) Singapore'],
+  ['Asia/Tokyo','(GMT+09:00) Tokyo'],
+  ['Australia/Sydney','(GMT+11:00) Sydney'],
 ];
 
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
-const SettingsSkeleton = () => (
-  <div className="flex bg-white rounded-xl border border-[#E2E8F0] overflow-hidden min-h-[600px]">
-    <div className="w-56 bg-[#F8FAFC] border-r border-[#E2E8F0] p-3">
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="h-10 bg-[#E2E8F0] rounded-lg mb-2 animate-pulse" />
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+const Skeleton = () => (
+  <div className="flex bg-white rounded-lg border border-[#E5E7EB] min-h-[500px]">
+    <div className="w-44 bg-[#F9FAFB] border-r border-[#E5E7EB] p-3">
+      {[...Array(5)].map((_,i) => (
+        <div key={i} className="h-8 bg-[#E5E7EB] rounded mb-1.5 animate-pulse"/>
       ))}
     </div>
-    <div className="flex-1 p-8">
-      {[...Array(6)].map((_, i) => (
-        <div key={i} className={`h-4 bg-[#E2E8F0] rounded animate-pulse mb-3 ${i % 3 === 2 ? 'w-1/2 mb-6' : ''}`} />
+    <div className="flex-1 p-6 space-y-3">
+      {[...Array(8)].map((_,i) => (
+        <div key={i} className={`h-3 bg-[#F3F4F6] rounded animate-pulse ${i%4===3?'w-1/3 mb-4':'w-full'}`}/>
       ))}
     </div>
   </div>
 );
 
-// ─── Danger Confirmation Modal ────────────────────────────────────────────────
+// ─── Danger Modal ─────────────────────────────────────────────────────────────
 const DangerModal = ({ action, onCancel, onConfirm, loading }) => {
   const [text, setText] = useState('');
-  const inputRef = useRef(null);
+  const ref = useRef(null);
+  useEffect(() => { setTimeout(() => ref.current?.focus(), 60); }, []);
 
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 50);
-  }, []);
-
-  const messages = {
-    'factory-reset': {
-      title: 'Reset to Factory Defaults?',
-      body: 'This will restore ALL settings to their factory defaults. Your SMTP configuration, branding, security policy, and all other customisations will be permanently lost.',
-      btn: 'Yes, Reset Settings',
-    },
-    'reset-passwords': {
-      title: 'Force Password Reset?',
-      body: 'All users will be required to set a new password on their next login. They will be unable to access OWMS until they do.',
-      btn: 'Yes, Reset Passwords',
-    },
-  };
-  const m = messages[action];
+  const cfg = {
+    'factory-reset':    { title: 'Reset to factory defaults?', body: 'All settings (SMTP, branding, security, system) will be permanently restored to defaults. User data is not affected.', btn: 'Reset Settings' },
+    'reset-passwords':  { title: 'Force password reset for all users?', body: 'Every user will be required to set a new password on next login.', btn: 'Reset Passwords' },
+  }[action] || {};
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8"
-        >
-          <div className="flex flex-col items-center text-center mb-6">
-            <div className="bg-[#FEE2E2] rounded-full p-3 mb-4">
-              <AlertTriangle size={36} className="text-[#DC2626]" />
-            </div>
-            <h2 className="text-lg font-bold text-[#0F172A] mb-2">{m.title}</h2>
-            <p className="text-sm text-[#64748B]">{m.body}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.14 }}
+        className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6"
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+            <AlertTriangle size={18} className="text-red-500"/>
           </div>
-
-          <div className="mb-5">
-            <p className="text-sm text-[#64748B] mb-2">To confirm, type <strong className="text-[#0F172A]">CONFIRM</strong> below:</p>
-            <input
-              ref={inputRef}
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder="Type CONFIRM here"
-              className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#DC2626] focus:ring-1 focus:ring-[#DC2626]"
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={onCancel}
-              className="flex-1 border border-[#E2E8F0] text-[#64748B] rounded-lg px-4 py-2 text-sm hover:bg-[#F8FAFC] transition"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => text === 'CONFIRM' && onConfirm()}
-              disabled={text !== 'CONFIRM' || loading}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium text-white transition
-                ${text === 'CONFIRM' && !loading
-                  ? 'bg-[#DC2626] hover:bg-[#B91C1C]'
-                  : 'bg-[#DC2626]/40 cursor-not-allowed'}`}
-            >
-              {loading ? <span className="flex items-center justify-center gap-2"><RefreshCw size={14} className="animate-spin" />Working…</span> : m.btn}
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    </AnimatePresence>
+          <p className="text-[14px] font-semibold text-[#0F172A]">{cfg.title}</p>
+        </div>
+        <p className="text-[12px] text-[#6B7280] mb-4 leading-relaxed">{cfg.body}</p>
+        <p className="text-[12px] text-[#374151] mb-2">Type <strong>CONFIRM</strong> to proceed:</p>
+        <input
+          ref={ref} value={text} onChange={e => setText(e.target.value)}
+          placeholder="CONFIRM"
+          className="w-full border border-[#D1D5DB] rounded-md px-3 py-2 text-[13px] mb-4 focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
+        />
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCancel} className="px-3 py-1.5 text-[13px] border border-[#D1D5DB] text-[#6B7280] rounded-md hover:bg-[#F9FAFB] transition">Cancel</button>
+          <button
+            onClick={() => text === 'CONFIRM' && !loading && onConfirm()}
+            disabled={text !== 'CONFIRM' || loading}
+            className={`px-3 py-1.5 text-[13px] rounded-md text-white font-medium transition
+              ${text === 'CONFIRM' && !loading ? 'bg-red-600 hover:bg-red-700' : 'bg-red-300 cursor-not-allowed'}`}
+          >
+            {loading ? <span className="flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin"/>Working…</span> : cfg.btn}
+          </button>
+        </div>
+      </motion.div>
+    </div>
   );
 };
 
-// ─── TAB 1: General ───────────────────────────────────────────────────────────
-const GeneralTab = ({ s, update, errors, canEdit }) => (
-  <div>
-    <Card title="Application Identity" subtitle="Core names used across the system, emails, and reports.">
-      <Field label="Application Name" required error={errors['general.appName']}
-        helper="Displayed in the browser tab and page header">
-        <Input
-          value={s.appName || ''}
-          onChange={e => update('appName', e.target.value)}
-          disabled={!canEdit}
-          error={errors['general.appName']}
-          placeholder="Office Workspace Management System"
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB CONTENT COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── General ──────────────────────────────────────────────────────────────────
+function GeneralTab({ s, upd, err, canEdit }) {
+  return (
+    <div className="space-y-0">
+      <SectionHead title="Application Identity" desc="Names used across the UI, emails, and reports"/>
+      <Row label="Application Name" helper="Browser tab & page header">
+        <Input value={s.appName||''} onChange={e=>upd('appName',e.target.value)} disabled={!canEdit} error={err['general.appName']} className="w-full"/>
+      </Row>
+      <Row label="Organization Name" helper="Used in emails & generated reports">
+        <Input value={s.orgName||''} onChange={e=>upd('orgName',e.target.value)} disabled={!canEdit} className="w-full"/>
+      </Row>
+
+      <div className="pt-4 mt-2">
+        <SectionHead title="Localization" desc="Controls timestamps, date displays, and scheduled reports"/>
+      </div>
+      <Row label="Timezone">
+        <Sel value={s.timezone||'Asia/Kolkata'} onChange={e=>upd('timezone',e.target.value)} disabled={!canEdit} className="w-full">
+          {ZONES.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+        </Sel>
+      </Row>
+      <Row label="Date Format">
+        <div className="flex items-center gap-3">
+          <Sel value={s.dateFormat||'DD/MM/YYYY'} onChange={e=>upd('dateFormat',e.target.value)} disabled={!canEdit}>
+            {['DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD','DD MMM YYYY'].map(f=><option key={f} value={f}>{f}</option>)}
+          </Sel>
+          <span className="text-[11px] text-[#2563EB] font-medium">e.g. {previewDate(s.dateFormat||'DD/MM/YYYY')}</span>
+        </div>
+      </Row>
+      <Row label="Time Format">
+        <Seg
+          options={[{value:'12',label:'12-hour'},{value:'24',label:'24-hour'}]}
+          value={s.timeFormat||'24'} onChange={v=>upd('timeFormat',v)} disabled={!canEdit}
         />
-      </Field>
-      <Field label="Organization Name" required error={errors['general.orgName']}
-        helper="Used in emails and generated reports">
-        <Input
-          value={s.orgName || ''}
-          onChange={e => update('orgName', e.target.value)}
-          disabled={!canEdit}
-          error={errors['general.orgName']}
-          placeholder="Movi Cloud Labs"
+      </Row>
+      <Row label="Items Per Page" helper="Default pagination for all list views" error={err['general.itemsPerPage']}>
+        <Seg
+          options={[10,25,50,100].map(n=>({value:n,label:String(n)}))}
+          value={s.itemsPerPage||25} onChange={v=>upd('itemsPerPage',v)} disabled={!canEdit}
         />
-      </Field>
-    </Card>
+      </Row>
+    </div>
+  );
+}
 
-    <Card title="Localization" subtitle="Controls timestamps, date displays, and report formatting.">
-      <Field label="Timezone" helper="Affects all timestamps and scheduled reports">
-        <Select value={s.timezone || 'Asia/Kolkata'} onChange={e => update('timezone', e.target.value)} disabled={!canEdit}>
-          {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
-        </Select>
-      </Field>
-
-      <Field label="Date Format">
-        <Select value={s.dateFormat || 'DD/MM/YYYY'} onChange={e => update('dateFormat', e.target.value)} disabled={!canEdit}>
-          {['DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD','DD MMM YYYY'].map(f => (
-            <option key={f} value={f}>{f}</option>
-          ))}
-        </Select>
-        <p className="text-xs text-[#2563EB] mt-1.5 font-medium">
-          Preview: {formatDatePreview(s.dateFormat || 'DD/MM/YYYY')}
-        </p>
-      </Field>
-
-      <Field label="Time Format">
-        <SegmentGroup
-          options={[{ value: '12', label: '12-hour (AM/PM)' }, { value: '24', label: '24-hour' }]}
-          value={s.timeFormat || '24'}
-          onChange={v => update('timeFormat', v)}
-          disabled={!canEdit}
-        />
-      </Field>
-    </Card>
-
-    <Card title="Display Preferences" subtitle="Controls default pagination across all list views.">
-      <Field label="Default Items Per Page" error={errors['general.itemsPerPage']}>
-        <SegmentGroup
-          options={[10,25,50,100].map(n => ({ value: n, label: String(n) }))}
-          value={s.itemsPerPage || 25}
-          onChange={v => update('itemsPerPage', v)}
-          disabled={!canEdit}
-        />
-      </Field>
-    </Card>
-  </div>
-);
-
-// ─── TAB 2: Security ──────────────────────────────────────────────────────────
-const SecurityTab = ({ s, update, errors, canEdit }) => {
-  const reqList = [];
-  if (s.requireUppercase) reqList.push('uppercase letters');
-  if (s.requireLowercase) reqList.push('lowercase letters');
-  if (s.requireNumbers)   reqList.push('numbers');
-  if (s.requireSpecial)   reqList.push('special characters');
-  const policyDesc = reqList.length
-    ? `at least ${s.minPasswordLength || 8} characters and contain ${reqList.join(', ')}`
-    : `at least ${s.minPasswordLength || 8} characters`;
+// ─── Security ─────────────────────────────────────────────────────────────────
+function SecurityTab({ s, upd, err, canEdit }) {
+  const reqs = [
+    s.requireUppercase && 'uppercase',
+    s.requireLowercase && 'lowercase',
+    s.requireNumbers   && 'numbers',
+    s.requireSpecial   && 'special chars',
+  ].filter(Boolean);
 
   return (
     <div>
-      <Card title="Password Policy" subtitle="Rules applied when users create or change their password.">
-        <Field label="Minimum Password Length" error={errors['security.minPasswordLength']}>
-          <div className="flex items-center gap-4">
-            <input
-              type="range" min={6} max={32} step={1}
-              value={s.minPasswordLength || 8}
-              onChange={e => update('minPasswordLength', parseInt(e.target.value))}
-              disabled={!canEdit}
-              className="flex-1 accent-[#2563EB] disabled:opacity-40"
-            />
-            <span className="text-sm font-semibold text-[#2563EB] w-20 text-right shrink-0">
-              {s.minPasswordLength || 8} chars
-            </span>
-          </div>
-          {errors['security.minPasswordLength'] && (
-            <p className="text-xs text-[#DC2626] mt-1">{errors['security.minPasswordLength']}</p>
-          )}
-        </Field>
-
-        <Field label="Password Requirements">
-          <div className="space-y-0">
-            {[
-              { field: 'requireUppercase', label: 'Require uppercase letters (A–Z)' },
-              { field: 'requireLowercase', label: 'Require lowercase letters (a–z)' },
-              { field: 'requireNumbers',   label: 'Require numbers (0–9)' },
-              { field: 'requireSpecial',   label: 'Require special characters (!@#$…)' },
-            ].map(row => (
-              <ToggleRow
-                key={row.field}
-                label={row.label}
-                checked={!!s[row.field]}
-                onChange={v => update(row.field, v)}
-                disabled={!canEdit}
-              />
-            ))}
-          </div>
-          <div className="bg-[#F8FAFC] rounded-lg p-3 mt-3 text-xs text-[#64748B]">
-            A valid password must be <span className="font-medium text-[#0F172A]">{policyDesc}</span>.
-          </div>
-        </Field>
-
-        <Field label="Password Expiry">
-          <ToggleRow
-            label="Enable password expiry"
-            sub="Users will be forced to reset their password periodically"
-            checked={!!s.passwordExpiryEnabled}
-            onChange={v => update('passwordExpiryEnabled', v)}
+      <SectionHead title="Password Policy" desc="Applied when users create or update their password"/>
+      <Row label="Min. Password Length" error={err['security.minPasswordLength']}>
+        <div className="flex items-center gap-3">
+          <input type="range" min={6} max={32} step={1}
+            value={s.minPasswordLength||8}
+            onChange={e=>upd('minPasswordLength',parseInt(e.target.value))}
             disabled={!canEdit}
-            border={false}
+            className="w-36 accent-[#2563EB] disabled:opacity-40"
           />
+          <span className="text-[13px] font-semibold text-[#2563EB] w-16">{s.minPasswordLength||8} chars</span>
+        </div>
+      </Row>
+      <Row label="Requirements">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+          {[
+            ['requireUppercase','Uppercase (A–Z)'],
+            ['requireLowercase','Lowercase (a–z)'],
+            ['requireNumbers','Numbers (0–9)'],
+            ['requireSpecial','Special (!@#$)'],
+          ].map(([f,l]) => (
+            <label key={f} className="flex items-center gap-2 cursor-pointer select-none">
+              <Toggle checked={!!s[f]} onChange={v=>upd(f,v)} disabled={!canEdit}/>
+              <span className="text-[12px] text-[#374151]">{l}</span>
+            </label>
+          ))}
+        </div>
+        {reqs.length > 0 && (
+          <p className="text-[11px] text-[#6B7280] mt-2 bg-[#F9FAFB] rounded px-2.5 py-1.5 border border-[#E5E7EB]">
+            Password must be ≥{s.minPasswordLength||8} chars and contain {reqs.join(', ')}.
+          </p>
+        )}
+      </Row>
+      <Row label="Password Expiry">
+        <div className="flex items-center gap-3">
+          <Toggle checked={!!s.passwordExpiryEnabled} onChange={v=>upd('passwordExpiryEnabled',v)} disabled={!canEdit}/>
           <AnimatePresence>
             {s.passwordExpiryEnabled && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.18 }}
-                className="overflow-hidden mt-3"
-              >
-                <Field label="Expire passwords every (days)" helper="Users will be forced to reset after this many days">
-                  <Input
-                    type="number" min={30} max={365}
-                    value={s.passwordExpiryDays || 90}
-                    onChange={e => update('passwordExpiryDays', parseInt(e.target.value))}
-                    disabled={!canEdit}
-                    className="w-32"
-                  />
-                </Field>
+              <motion.div initial={{opacity:0,width:0}} animate={{opacity:1,width:'auto'}} exit={{opacity:0,width:0}} className="overflow-hidden">
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <span className="text-[12px] text-[#6B7280]">Expire after</span>
+                  <Input type="number" min={30} max={365} value={s.passwordExpiryDays||90}
+                    onChange={e=>upd('passwordExpiryDays',parseInt(e.target.value))}
+                    disabled={!canEdit} className="w-20"/>
+                  <span className="text-[12px] text-[#6B7280]">days</span>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
-        </Field>
-      </Card>
+        </div>
+      </Row>
 
-      <Card title="Session & Account Lockout" subtitle="Controls how long sessions last and how failed logins are handled.">
-        <Field label="Session Timeout">
-          <Select
-            value={s.sessionTimeout || '1hour'}
-            onChange={e => update('sessionTimeout', e.target.value)}
-            disabled={!canEdit}
-          >
-            {[
-              { v: '15min',  l: '15 minutes' },
-              { v: '30min',  l: '30 minutes' },
-              { v: '1hour',  l: '1 hour' },
-              { v: '2hours', l: '2 hours' },
-              { v: '4hours', l: '4 hours' },
-              { v: '8hours', l: '8 hours' },
-              { v: 'never',  l: 'Never' },
-            ].map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-          </Select>
-          {s.sessionTimeout === 'never' && (
-            <div className="bg-[#FEF3C7] border border-[#FDE68A] rounded p-2 mt-2 text-xs text-[#92400E] flex items-start gap-2">
-              <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-              Setting session timeout to Never is not recommended for enterprise security.
-            </div>
+      <div className="pt-4 mt-2">
+        <SectionHead title="Session & Lockout"/>
+      </div>
+      <Row label="Session Timeout">
+        <div className="flex flex-col gap-1.5">
+          <Sel value={s.sessionTimeout||'1hour'} onChange={e=>upd('sessionTimeout',e.target.value)} disabled={!canEdit} className="w-44">
+            {[['15min','15 minutes'],['30min','30 minutes'],['1hour','1 hour'],['2hours','2 hours'],['4hours','4 hours'],['8hours','8 hours'],['never','Never (not recommended)']].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </Sel>
+          {s.sessionTimeout==='never' && (
+            <p className="text-[11px] text-amber-600 flex items-center gap-1"><AlertTriangle size={11}/>Not recommended for enterprise environments.</p>
           )}
-        </Field>
+        </div>
+      </Row>
+      <Row label="Max Failed Logins" helper="Account locked after N consecutive failures" error={err['security.maxFailedLogins']}>
+        <Input type="number" min={3} max={10} value={s.maxFailedLogins||5}
+          onChange={e=>upd('maxFailedLogins',parseInt(e.target.value))}
+          disabled={!canEdit} className="w-20"/>
+      </Row>
+      <Row label="Lockout Duration">
+        <Sel value={s.lockoutDuration||'15min'} onChange={e=>upd('lockoutDuration',e.target.value)} disabled={!canEdit} className="w-52">
+          {[['5min','5 minutes'],['15min','15 minutes'],['30min','30 minutes'],['1hour','1 hour'],['until_admin_unlock','Until admin unlocks']].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+        </Sel>
+      </Row>
 
-        <Field label="Max Failed Login Attempts"
-          helper="Account will be locked after this many consecutive failed attempts"
-          error={errors['security.maxFailedLogins']}>
-          <Input
-            type="number" min={3} max={10}
-            value={s.maxFailedLogins || 5}
-            onChange={e => update('maxFailedLogins', parseInt(e.target.value))}
-            disabled={!canEdit}
-            className="w-28"
-          />
-        </Field>
-
-        <Field label="Account Lockout Duration">
-          <Select
-            value={s.lockoutDuration || '15min'}
-            onChange={e => update('lockoutDuration', e.target.value)}
-            disabled={!canEdit}
-          >
-            {[
-              { v: '5min',               l: '5 minutes' },
-              { v: '15min',              l: '15 minutes' },
-              { v: '30min',              l: '30 minutes' },
-              { v: '1hour',              l: '1 hour' },
-              { v: 'until_admin_unlock', l: 'Until admin manually unlocks' },
-            ].map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-          </Select>
-        </Field>
-      </Card>
-
-      <Card title="Two-Factor Authentication" subtitle="Controls the 2FA requirement across all user accounts.">
-        <div className="space-y-2">
+      <div className="pt-4 mt-2">
+        <SectionHead title="Two-Factor Authentication"/>
+      </div>
+      <Row label="2FA Policy" col>
+        <div className="flex gap-2">
           {[
-            { v: 'disabled', icon: <EyeOff size={18} />, title: 'Disabled',  sub: 'No 2FA required for any user' },
-            { v: 'optional', icon: <Shield  size={18} />, title: 'Optional',  sub: 'Users can choose to enable 2FA' },
-            { v: 'required', icon: <Lock    size={18} />, title: 'Required',  sub: 'All users must complete 2FA setup' },
-          ].map(opt => {
-            const active = (s.twoFactorPolicy || 'optional') === opt.v;
+            {v:'disabled', icon:<EyeOff size={13}/>, label:'Disabled',  sub:'No 2FA required'},
+            {v:'optional', icon:<Shield  size={13}/>, label:'Optional',  sub:'Users choose'},
+            {v:'required', icon:<Lock    size={13}/>, label:'Required',  sub:'All users must'},
+          ].map(o => {
+            const active = (s.twoFactorPolicy||'optional')===o.v;
             return (
-              <button
-                key={opt.v}
-                type="button"
-                disabled={!canEdit}
-                onClick={() => canEdit && update('twoFactorPolicy', opt.v)}
-                className={`w-full flex items-center gap-3 p-4 rounded-xl border text-left transition
-                  ${active
-                    ? 'border-[#2563EB] bg-[#EFF6FF]'
-                    : 'border-[#E2E8F0] hover:bg-[#F8FAFC]'}
-                  ${!canEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                `}
+              <button key={o.v} type="button" disabled={!canEdit}
+                onClick={()=>canEdit&&upd('twoFactorPolicy',o.v)}
+                className={`flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-lg border text-center transition
+                  ${active?'border-[#2563EB] bg-[#EFF6FF] text-[#2563EB]':'border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]'}
+                  ${!canEdit?'opacity-40 cursor-not-allowed':'cursor-pointer'}`}
               >
-                <span className={active ? 'text-[#2563EB]' : 'text-[#64748B]'}>{opt.icon}</span>
-                <div>
-                  <p className={`text-sm font-medium ${active ? 'text-[#2563EB]' : 'text-[#0F172A]'}`}>{opt.title}</p>
-                  <p className="text-xs text-[#64748B]">{opt.sub}</p>
-                </div>
+                {o.icon}
+                <span className="text-[12px] font-medium">{o.label}</span>
+                <span className="text-[10px] opacity-75">{o.sub}</span>
               </button>
             );
           })}
         </div>
-        {s.twoFactorPolicy === 'required' && (
-          <div className="bg-[#FEE2E2] border border-[#DC2626] rounded-lg p-3 mt-3 text-xs text-[#DC2626]">
-            <strong>Warning:</strong> Enabling Required 2FA will force ALL users to set up two-factor authentication on their next login. Users without 2FA will be blocked until they complete setup.
-          </div>
+        {s.twoFactorPolicy==='required' && (
+          <p className="text-[11px] text-red-600 mt-2 bg-red-50 border border-red-100 rounded px-2.5 py-1.5 flex items-start gap-1.5">
+            <AlertTriangle size={11} className="mt-0.5 shrink-0"/>
+            All users will be blocked from logging in until they complete 2FA setup.
+          </p>
         )}
-      </Card>
+      </Row>
     </div>
   );
-};
+}
 
-// ─── TAB 3: Notifications ─────────────────────────────────────────────────────
-const NotificationsTab = ({ s, update, errors, canEdit, userEmail }) => {
-  const [showPass, setShowPass]           = useState(false);
-  const [testing, setTesting]             = useState(false);
-  const [testResult, setTestResult]       = useState(null); // null | { ok, msg }
+// ─── Notifications ────────────────────────────────────────────────────────────
+function NotificationsTab({ s, upd, err, canEdit, userEmail }) {
+  const [showPass, setShowPass] = useState(false);
+  const [testing, setTesting]   = useState(false);
+  const [testRes, setTestRes]   = useState(null);
 
-  const handleTestEmail = async () => {
-    setTesting(true);
-    setTestResult(null);
+  const runTest = async () => {
+    setTesting(true); setTestRes(null);
     try {
-      const res = await adminAPI.testEmail();
-      setTestResult({ ok: true, msg: res.data.message || `Test email sent to ${userEmail}` });
-      setTimeout(() => setTestResult(null), 5000);
-    } catch (err) {
-      setTestResult({ ok: false, msg: err.response?.data?.message || 'Failed to connect to SMTP server.' });
-    } finally {
-      setTesting(false);
-    }
+      const r = await adminAPI.testEmail();
+      setTestRes({ ok: true, msg: r.data.message || `Sent to ${userEmail}` });
+      setTimeout(() => setTestRes(null), 5000);
+    } catch(e) {
+      setTestRes({ ok: false, msg: e.response?.data?.message || 'SMTP connection failed.' });
+    } finally { setTesting(false); }
   };
 
   return (
     <div>
-      <Card title="Email Configuration" subtitle="SMTP server settings used to send all system emails.">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="SMTP Host">
-            <Input
-              value={s.smtpHost || ''}
-              onChange={e => update('smtpHost', e.target.value)}
-              placeholder="smtp.gmail.com"
-              disabled={!canEdit}
-            />
-          </Field>
-          <Field label="SMTP Port">
-            <Input
-              type="number"
-              value={s.smtpPort || 587}
-              onChange={e => update('smtpPort', parseInt(e.target.value))}
-              disabled={!canEdit}
-              className="w-full"
-            />
-          </Field>
-          <Field label="SMTP Username">
-            <Input
-              value={s.smtpUser || ''}
-              onChange={e => update('smtpUser', e.target.value)}
-              placeholder="your@email.com"
-              disabled={!canEdit}
-            />
-          </Field>
-          <Field label="SMTP Password">
-            <div className="relative">
-              <Input
-                type={showPass ? 'text' : 'password'}
-                value={s.smtpPass || ''}
-                onChange={e => update('smtpPass', e.target.value)}
-                placeholder="Leave blank to keep existing"
-                disabled={!canEdit}
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPass(p => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#64748B]"
-                tabIndex={-1}
-              >
-                {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-            <p className="text-xs text-[#64748B] mt-1">Leave blank to keep the currently stored password.</p>
-          </Field>
+      <SectionHead title="SMTP Configuration" desc="Used to send all system-generated emails"/>
+      <Row label="Host & Port">
+        <div className="flex gap-2">
+          <Input value={s.smtpHost||''} onChange={e=>upd('smtpHost',e.target.value)} disabled={!canEdit} placeholder="smtp.gmail.com" className="flex-1"/>
+          <Input type="number" value={s.smtpPort||587} onChange={e=>upd('smtpPort',parseInt(e.target.value))} disabled={!canEdit} className="w-20"/>
         </div>
-
-        <Field label="Encryption">
-          <SegmentGroup
-            options={[
-              { value: 'none', label: 'None' },
-              { value: 'TLS',  label: 'TLS'  },
-              { value: 'SSL',  label: 'SSL'  },
-            ]}
-            value={s.smtpEncryption || 'TLS'}
-            onChange={v => update('smtpEncryption', v)}
-            disabled={!canEdit}
-          />
-        </Field>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="From Email Address" error={errors['notifications.fromEmail']}>
-            <Input
-              type="email"
-              value={s.fromEmail || ''}
-              onChange={e => update('fromEmail', e.target.value)}
-              placeholder="noreply@movicloudlabs.com"
-              disabled={!canEdit}
-              error={errors['notifications.fromEmail']}
-            />
-          </Field>
-          <Field label="From Display Name" helper="Appears as sender name in all system emails">
-            <Input
-              value={s.fromName || ''}
-              onChange={e => update('fromName', e.target.value)}
-              placeholder="OWMS Notifications"
-              disabled={!canEdit}
-            />
-          </Field>
-        </div>
-
-        <div className="mt-2">
-          {!testResult ? (
-            <button
-              onClick={handleTestEmail}
-              disabled={testing || !canEdit}
-              className="flex items-center gap-2 bg-[#EFF6FF] border border-[#2563EB] text-[#2563EB] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#DBEAFE] transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {testing
-                ? <><RefreshCw size={14} className="animate-spin" /> Sending…</>
-                : <><Mail size={14} /> Send Test Email</>
-              }
+      </Row>
+      <Row label="Credentials">
+        <div className="flex gap-2">
+          <Input value={s.smtpUser||''} onChange={e=>upd('smtpUser',e.target.value)} disabled={!canEdit} placeholder="SMTP username" className="flex-1"/>
+          <div className="relative flex-1">
+            <Input type={showPass?'text':'password'} value={s.smtpPass||''} onChange={e=>upd('smtpPass',e.target.value)}
+              disabled={!canEdit} placeholder="Leave blank to keep" className="w-full pr-8"/>
+            <button type="button" onClick={()=>setShowPass(p=>!p)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#6B7280]">
+              {showPass?<EyeOff size={13}/>:<Eye size={13}/>}
             </button>
-          ) : testResult.ok ? (
-            <div className="flex items-center gap-2 text-[#16A34A] text-sm font-medium">
-              <CheckCircle2 size={16} /> {testResult.msg}
-            </div>
-          ) : (
-            <div className="flex items-start gap-2 text-[#DC2626] text-xs">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" /> {testResult.msg}
-            </div>
-          )}
+          </div>
         </div>
-      </Card>
+      </Row>
+      <Row label="Encryption">
+        <Seg options={[{value:'none',label:'None'},{value:'TLS',label:'TLS'},{value:'SSL',label:'SSL'}]}
+          value={s.smtpEncryption||'TLS'} onChange={v=>upd('smtpEncryption',v)} disabled={!canEdit}/>
+      </Row>
+      <Row label="From">
+        <div className="flex gap-2">
+          <Input type="email" value={s.fromEmail||''} onChange={e=>upd('fromEmail',e.target.value)}
+            disabled={!canEdit} placeholder="noreply@domain.com" error={err['notifications.fromEmail']} className="flex-1"/>
+          <Input value={s.fromName||''} onChange={e=>upd('fromName',e.target.value)}
+            disabled={!canEdit} placeholder="Display name" className="flex-1"/>
+        </div>
+        {err['notifications.fromEmail'] && <p className="text-[11px] text-red-500">{err['notifications.fromEmail']}</p>}
+      </Row>
+      <Row label="Test Connection">
+        {!testRes ? (
+          <button onClick={runTest} disabled={testing||!canEdit}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border border-[#D1D5DB] rounded-md text-[#374151] hover:bg-[#F9FAFB] transition disabled:opacity-40">
+            {testing ? <><RefreshCw size={12} className="animate-spin"/>Sending…</> : <><Mail size={12}/>Send Test Email</>}
+          </button>
+        ) : (
+          <div className={`flex items-center gap-1.5 text-[12px] font-medium ${testRes.ok?'text-green-600':'text-red-500'}`}>
+            {testRes.ok ? <CheckCircle2 size={13}/> : <AlertCircle size={13}/>}
+            {testRes.msg}
+          </div>
+        )}
+      </Row>
 
-      <Card title="System Event Notifications"
-        subtitle="Configure which events trigger email notifications to system administrators.">
-        {[
-          { field: 'notifyNewUser',          label: 'New user created',          sub: 'When Admin creates a new user account' },
-          { field: 'notifyUserDeactivated',  label: 'User deactivated',          sub: 'When a user account is disabled or removed' },
-          { field: 'notifyFailedLogin',      label: 'Failed login attempts',     sub: 'When an account has 3+ consecutive failed logins' },
-          { field: 'notifyPermissionChange', label: 'Permission changes',        sub: 'When Access Matrix is modified' },
-          { field: 'notifySystemError',      label: 'System errors',             sub: 'When critical backend errors occur' },
-          { field: 'notifyLeaveRequest',     label: 'Leave requests',            sub: 'When employees or interns submit leave requests' },
-          { field: 'notifyReportGenerated',  label: 'Report generated',          sub: 'When a scheduled report completes' },
-        ].map(row => (
-          <ToggleRow
-            key={row.field}
-            label={row.label}
-            sub={row.sub}
-            checked={!!s[row.field]}
-            onChange={v => update(row.field, v)}
-            disabled={!canEdit}
-          />
-        ))}
-      </Card>
+      <div className="pt-4 mt-2">
+        <SectionHead title="Event Notifications" desc="Which events trigger admin email alerts"/>
+      </div>
+      {[
+        ['notifyNewUser',          'New user created',         'When an Admin creates a new user account'],
+        ['notifyUserDeactivated',  'User deactivated',         'When a user account is disabled or removed'],
+        ['notifyFailedLogin',      'Failed login attempts',    'When an account hits 3+ consecutive failures'],
+        ['notifyPermissionChange', 'Permission changes',       'When the Access Matrix is modified'],
+        ['notifySystemError',      'System errors',            'When critical backend errors occur'],
+        ['notifyLeaveRequest',     'Leave requests',           'When employees submit leave requests'],
+        ['notifyReportGenerated',  'Report generated',         'When a scheduled report completes'],
+      ].map(([f,l,sub]) => (
+        <ToggleRow key={f} label={l} sub={sub} checked={!!s[f]} onChange={v=>upd(f,v)} disabled={!canEdit}/>
+      ))}
     </div>
   );
-};
+}
 
-// ─── TAB 4: Branding ──────────────────────────────────────────────────────────
-const BrandingTab = ({ s, update, canEdit }) => {
-  const fileInputRef               = useRef(null);
-  const [uploading, setUploading]  = useState(false);
-  const [uploadMsg, setUploadMsg]  = useState(null); // { ok, msg }
-  const [preview, setPreview]      = useState(null);
+// ─── Branding ─────────────────────────────────────────────────────────────────
+function BrandingTab({ s, upd, canEdit }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState(null);
+  const [preview,   setPreview]   = useState(null);
 
-  const handleLogoFile = async (file) => {
+  const handleFile = async (file) => {
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setUploadMsg({ ok: false, msg: 'File exceeds 2 MB limit.' });
-      return;
-    }
-    // Local preview
+    if (file.size > 2*1024*1024) { setUploadMsg({ok:false,msg:'Max 2 MB'}); return; }
     const reader = new FileReader();
     reader.onload = e => setPreview(e.target.result);
     reader.readAsDataURL(file);
-
-    setUploading(true);
-    setUploadMsg(null);
+    setUploading(true); setUploadMsg(null);
     try {
-      const fd = new FormData();
-      fd.append('logo', file);
-      const res = await adminAPI.uploadLogo(fd);
-      const logoUrl = res.data.data?.logoUrl;
-      if (logoUrl) update('logoPath', logoUrl.replace('/uploads/avatars/', ''));
-      setUploadMsg({ ok: true, msg: 'Logo uploaded successfully.' });
-    } catch (err) {
-      setUploadMsg({ ok: false, msg: err.response?.data?.message || 'Upload failed.' });
-    } finally {
-      setUploading(false);
-    }
+      const fd = new FormData(); fd.append('logo', file);
+      const r = await adminAPI.uploadLogo(fd);
+      upd('logoPath', r.data.data?.logoUrl?.replace('/uploads/avatars/',''));
+      setUploadMsg({ok:true,msg:'Uploaded successfully'});
+    } catch(e) { setUploadMsg({ok:false,msg:e.response?.data?.message||'Upload failed'}); }
+    finally { setUploading(false); }
   };
 
   const logoSrc = preview || (s.logoPath ? `/uploads/avatars/${s.logoPath}` : null);
 
   return (
     <div>
-      <Card title="Company Logo" subtitle="Displayed in the application header and generated reports.">
+      <SectionHead title="Company Logo" desc="Shown in the app header and generated reports"/>
+      <Row label="Logo" col>
         {logoSrc && (
-          <div className="flex items-center gap-4 mb-4 p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
-            <img src={logoSrc} alt="Company logo" className="h-10 object-contain" />
-            <div className="flex-1">
-              <p className="text-xs font-medium text-[#0F172A]">Current Logo</p>
-            </div>
+          <div className="flex items-center gap-3 mb-3 p-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg">
+            <img src={logoSrc} alt="Logo" className="h-8 object-contain"/>
             {canEdit && (
-              <button
-                onClick={() => { update('logoPath', null); setPreview(null); }}
-                className="text-xs text-[#DC2626] hover:underline"
-              >
-                Remove
-              </button>
+              <button onClick={()=>{upd('logoPath',null);setPreview(null);}}
+                className="text-[11px] text-red-500 hover:text-red-700 ml-auto">Remove</button>
             )}
           </div>
         )}
-
-        <div
-          onClick={() => canEdit && !uploading && fileInputRef.current?.click()}
-          className={`border-2 border-dashed border-[#E2E8F0] rounded-xl p-8 text-center transition
-            ${canEdit && !uploading ? 'cursor-pointer hover:border-[#2563EB] hover:bg-[#F8FAFC]' : 'opacity-50 cursor-not-allowed'}
-          `}
-        >
-          {uploading ? (
-            <div className="flex flex-col items-center gap-2">
-              <RefreshCw size={24} className="text-[#2563EB] animate-spin" />
-              <p className="text-sm text-[#64748B]">Uploading…</p>
-            </div>
-          ) : (
-            <>
-              <Upload size={24} className="text-[#94A3B8] mx-auto mb-2" />
-              <p className="text-sm text-[#64748B] mb-1">Click to upload or drag and drop</p>
-              <p className="text-xs text-[#94A3B8]">SVG, PNG, JPG · Max 2 MB · Recommended: 200×50 px</p>
-            </>
-          )}
+        <div onClick={()=>canEdit&&!uploading&&fileRef.current?.click()}
+          className={`border-2 border-dashed border-[#D1D5DB] rounded-lg p-5 text-center transition
+            ${canEdit&&!uploading?'cursor-pointer hover:border-[#2563EB] hover:bg-[#F0F9FF]':'opacity-50 cursor-not-allowed'}`}>
+          {uploading
+            ? <div className="flex flex-col items-center gap-1"><RefreshCw size={18} className="text-[#2563EB] animate-spin"/><p className="text-[11px] text-[#6B7280]">Uploading…</p></div>
+            : <><Upload size={18} className="text-[#9CA3AF] mx-auto mb-1"/><p className="text-[12px] text-[#6B7280]">Click to upload — SVG, PNG, JPG · Max 2 MB</p></>
+          }
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/svg+xml"
-          className="hidden"
-          onChange={e => handleLogoFile(e.target.files[0])}
-        />
-        {uploadMsg && (
-          <p className={`text-xs mt-2 ${uploadMsg.ok ? 'text-[#16A34A]' : 'text-[#DC2626]'}`}>
-            {uploadMsg.msg}
-          </p>
-        )}
-      </Card>
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/svg+xml" className="hidden"
+          onChange={e=>handleFile(e.target.files[0])}/>
+        {uploadMsg && <p className={`text-[11px] mt-1.5 ${uploadMsg.ok?'text-green-600':'text-red-500'}`}>{uploadMsg.msg}</p>}
+      </Row>
 
-      <Card title="Login Page Text" subtitle="Text displayed on the login screen.">
-        <Field label="Login Page Title" helper="Large heading shown on the login page">
-          <Input
-            value={s.loginTitle || ''}
-            onChange={e => update('loginTitle', e.target.value)}
-            disabled={!canEdit}
-            placeholder="Welcome to OWMS"
-          />
-        </Field>
-        <Field label="Login Page Subtitle" helper="Smaller text below the title">
-          <Input
-            value={s.loginSubtitle || ''}
-            onChange={e => update('loginSubtitle', e.target.value)}
-            disabled={!canEdit}
-            placeholder="Office Workspace Management System"
-          />
-        </Field>
-
-        <div className="mt-2">
-          <p className="text-xs text-[#64748B] mb-2">Login Page Preview</p>
-          <div className="bg-[#1E293B] rounded-xl p-8 text-center">
-            <div className="w-12 h-12 rounded-full bg-[#334155] mx-auto mb-4 flex items-center justify-center">
-              <span className="text-[#94A3B8] text-xs font-bold">OW</span>
-            </div>
-            <p className="text-xl font-bold text-white mb-1">{s.loginTitle || 'Welcome to OWMS'}</p>
-            <p className="text-sm text-[#94A3B8]">{s.loginSubtitle || 'Office Workspace Management System'}</p>
+      <div className="pt-4 mt-2">
+        <SectionHead title="Login Page" desc="Text shown to users on the sign-in screen"/>
+      </div>
+      <Row label="Title">
+        <Input value={s.loginTitle||''} onChange={e=>upd('loginTitle',e.target.value)}
+          disabled={!canEdit} placeholder="Welcome to OWMS" className="w-full"/>
+      </Row>
+      <Row label="Subtitle">
+        <Input value={s.loginSubtitle||''} onChange={e=>upd('loginSubtitle',e.target.value)}
+          disabled={!canEdit} placeholder="Office Workspace Management System" className="w-full"/>
+      </Row>
+      <Row label="Preview" col>
+        <div className="bg-[#1E293B] rounded-lg p-6 text-center">
+          <div className="w-9 h-9 rounded-full bg-[#334155] mx-auto mb-3 flex items-center justify-center">
+            <span className="text-[10px] font-bold text-[#94A3B8]">OW</span>
           </div>
+          <p className="text-[15px] font-bold text-white mb-1">{s.loginTitle||'Welcome to OWMS'}</p>
+          <p className="text-[11px] text-[#94A3B8]">{s.loginSubtitle||'Office Workspace Management System'}</p>
         </div>
-      </Card>
+      </Row>
     </div>
   );
-};
+}
 
-// ─── TAB 5: System ────────────────────────────────────────────────────────────
-const SystemTab = ({ s, update, canEdit, isSuperAdmin, onDangerAction, updatedAt }) => {
+// ─── System ───────────────────────────────────────────────────────────────────
+function SystemTab({ s, upd, err, canEdit, isSuperAdmin, onDanger, updatedAt }) {
   return (
     <div>
-      {/* System Information — read-only */}
-      <Card title="System Information" subtitle="Read-only runtime information about this installation.">
-        <div className="bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] p-5 grid grid-cols-2 gap-x-8 gap-y-3">
-          {[
-            { label: 'Version',        value: '1.0.0' },
-            { label: 'Platform',       value: 'OWMS — Movi Cloud Labs' },
-            { label: 'API Status',     value: s.apiEnabled ? 'Active' : 'Disabled',
-              color: s.apiEnabled ? '#16A34A' : '#DC2626' },
-            { label: 'Last Updated',   value: updatedAt
-                ? new Date(updatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
-                : '—' },
-          ].map(item => (
-            <div key={item.label}>
-              <p className="text-xs text-[#64748B]">{item.label}</p>
-              <p className="text-sm font-medium mt-0.5" style={{ color: item.color || '#0F172A' }}>
-                {item.value}
-              </p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Maintenance Mode */}
-      <Card>
-        <div className={`rounded-xl border p-5 transition-colors ${s.maintenanceMode ? 'bg-[#FEF2F2] border-[#DC2626]' : 'bg-white border-[#E2E8F0]'}`}>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              {s.maintenanceMode
-                ? <AlertTriangle size={18} className="text-[#DC2626]" />
-                : <Shield size={18} className="text-[#16A34A]" />
-              }
-              <span className={`text-sm font-semibold ${s.maintenanceMode ? 'text-[#DC2626]' : 'text-[#0F172A]'}`}>
-                Maintenance Mode — {s.maintenanceMode ? 'ACTIVE' : 'Off'}
-              </span>
-            </div>
-            <Toggle checked={!!s.maintenanceMode} onChange={v => update('maintenanceMode', v)} disabled={!canEdit} />
+      <SectionHead title="System Information" desc="Read-only — runtime status of this installation"/>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {[
+          ['Version',      '1.0.0'],
+          ['Platform',     'OWMS — Movi Cloud Labs'],
+          ['API Status',   s.apiEnabled ? 'Active' : 'Disabled'],
+          ['Last Updated', updatedAt ? new Date(updatedAt).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'}) : '—'],
+        ].map(([k,v]) => (
+          <div key={k} className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg px-3 py-2.5">
+            <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">{k}</p>
+            <p className={`text-[13px] font-medium mt-0.5 ${k==='API Status'?(s.apiEnabled?'text-green-600':'text-red-500'):'text-[#111827]'}`}>{v}</p>
           </div>
-          <p className="text-xs text-[#64748B] mb-3">
+        ))}
+      </div>
+
+      <SectionHead title="Maintenance Mode" desc="Temporarily blocks non-admin users from accessing the system"/>
+      <div className={`rounded-lg border p-4 mb-4 transition-colors ${s.maintenanceMode?'bg-red-50 border-red-200':'bg-[#F9FAFB] border-[#E5E7EB]'}`}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
             {s.maintenanceMode
-              ? 'All non-admin users are currently locked out.'
-              : 'All users can access the system normally.'}
-          </p>
-          {s.maintenanceMode && (
-            <div className="bg-[#DC2626] text-white text-xs rounded-lg p-2 mb-3">
-              ⚠ ACTIVE: Users see the maintenance message below instead of the application.
-            </div>
-          )}
-        </div>
-
-        <AnimatePresence>
-          {s.maintenanceMode && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="overflow-hidden mt-4"
-            >
-              <Field label="Maintenance Message"
-                helper="Shown to all non-admin users while maintenance mode is active">
-                <textarea
-                  rows={3}
-                  value={s.maintenanceMessage || ''}
-                  onChange={e => update('maintenanceMessage', e.target.value)}
-                  disabled={!canEdit}
-                  placeholder="System is under maintenance. Please check back soon."
-                  className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm text-[#0F172A] w-full
-                    focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] resize-none
-                    disabled:bg-[#F8FAFC] disabled:text-[#94A3B8] disabled:cursor-not-allowed"
-                />
-              </Field>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Card>
-
-      {/* API Settings */}
-      <Card title="API Settings" subtitle="Controls external API access to OWMS endpoints.">
-        <ToggleRow
-          label="Enable external API access"
-          sub="Allow external systems to call OWMS API endpoints"
-          checked={!!s.apiEnabled}
-          onChange={v => update('apiEnabled', v)}
-          disabled={!canEdit}
-        />
-        <AnimatePresence>
-          {s.apiEnabled && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="overflow-hidden mt-4"
-            >
-              <Field label="API Rate Limit (requests per minute)"
-                error={errors['system.apiRateLimit']}
-                helper="Maximum API calls allowed per minute per IP">
-                <Input
-                  type="number" min={10} max={1000}
-                  value={s.apiRateLimit || 100}
-                  onChange={e => update('apiRateLimit', parseInt(e.target.value))}
-                  disabled={!canEdit}
-                  error={errors['system.apiRateLimit']}
-                  className="w-36"
-                />
-              </Field>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Card>
-
-      {/* Danger Zone */}
-      <div className="border border-[#DC2626] rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <AlertTriangle size={16} className="text-[#DC2626]" />
-          <h3 className="text-base font-semibold text-[#DC2626]">Danger Zone</h3>
-        </div>
-        <p className="text-xs text-[#64748B] mb-5">These actions are irreversible. Proceed with extreme caution.</p>
-
-        {/* Force password reset */}
-        <div className="flex items-center justify-between py-4 border-b border-[#FEE2E2]">
-          <div>
-            <p className="text-sm font-medium text-[#0F172A]">Force Password Reset</p>
-            <p className="text-xs text-[#64748B] mt-0.5">All users will be required to set a new password on their next login.</p>
+              ? <AlertTriangle size={14} className="text-red-500"/>
+              : <Shield size={14} className="text-green-500"/>}
+            <span className={`text-[13px] font-semibold ${s.maintenanceMode?'text-red-600':'text-[#111827]'}`}>
+              {s.maintenanceMode ? 'Maintenance — ACTIVE' : 'Maintenance — Off'}
+            </span>
           </div>
-          <button
-            onClick={() => onDangerAction('reset-passwords')}
-            disabled={!canEdit}
-            className="border border-[#DC2626] text-[#DC2626] text-sm px-4 py-2 rounded-lg hover:bg-[#FEE2E2] transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0 ml-4"
-          >
-            Reset All Passwords
-          </button>
+          <Toggle checked={!!s.maintenanceMode} onChange={v=>upd('maintenanceMode',v)} disabled={!canEdit}/>
         </div>
+        <p className="text-[11px] text-[#6B7280]">
+          {s.maintenanceMode ? 'All non-admin users are blocked.' : 'All users can access normally.'}
+        </p>
+        <AnimatePresence>
+          {s.maintenanceMode && (
+            <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:0.15}} className="overflow-hidden mt-3">
+              <p className="text-[11px] text-[#374151] mb-1.5 font-medium">Message shown to blocked users:</p>
+              <textarea rows={2} value={s.maintenanceMessage||''}
+                onChange={e=>upd('maintenanceMessage',e.target.value)}
+                disabled={!canEdit}
+                placeholder="System is under maintenance. Please check back soon."
+                className="w-full border border-[#D1D5DB] rounded-md px-2.5 py-1.5 text-[12px] text-[#374151] resize-none bg-white
+                  focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-blue-100
+                  disabled:bg-[#F3F4F6] disabled:cursor-not-allowed"/>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-        {/* Factory reset — super admin only */}
-        {isSuperAdmin && (
-          <div className="flex items-center justify-between pt-4">
+      <SectionHead title="API Access"/>
+      <ToggleRow label="Enable external API access" sub="Allow third-party systems to call OWMS endpoints"
+        checked={!!s.apiEnabled} onChange={v=>upd('apiEnabled',v)} disabled={!canEdit}/>
+      <AnimatePresence>
+        {s.apiEnabled && (
+          <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:0.15}} className="overflow-hidden">
+            <Row label="Rate Limit" helper="Max requests/min per IP" error={err['system.apiRateLimit']}>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={10} max={1000} value={s.apiRateLimit||100}
+                  onChange={e=>upd('apiRateLimit',parseInt(e.target.value))}
+                  disabled={!canEdit} error={err['system.apiRateLimit']} className="w-24"/>
+                <span className="text-[11px] text-[#9CA3AF]">requests / minute</span>
+              </div>
+            </Row>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="mt-6 border border-red-200 rounded-lg p-4">
+        <div className="flex items-center gap-1.5 mb-1">
+          <AlertTriangle size={13} className="text-red-500"/>
+          <p className="text-[13px] font-semibold text-red-600">Danger Zone</p>
+        </div>
+        <p className="text-[11px] text-[#9CA3AF] mb-4">These actions are irreversible. Proceed with extreme caution.</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-[#0F172A]">Factory Reset</p>
-              <p className="text-xs text-[#64748B] mt-0.5">Restore all settings to defaults. User data is not affected.</p>
+              <p className="text-[13px] font-medium text-[#111827]">Force Password Reset</p>
+              <p className="text-[11px] text-[#6B7280]">All users must set a new password on next login.</p>
             </div>
-            <button
-              onClick={() => onDangerAction('factory-reset')}
-              disabled={!canEdit}
-              className="border border-[#DC2626] text-[#DC2626] text-sm px-4 py-2 rounded-lg hover:bg-[#FEE2E2] transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0 ml-4"
-            >
-              Factory Reset
+            <button onClick={()=>onDanger('reset-passwords')} disabled={!canEdit}
+              className="text-[12px] border border-red-300 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 transition disabled:opacity-40 shrink-0 ml-4">
+              Reset Passwords
             </button>
           </div>
-        )}
+          {isSuperAdmin && (
+            <div className="flex items-center justify-between pt-3 border-t border-red-100">
+              <div>
+                <p className="text-[13px] font-medium text-[#111827]">Factory Reset</p>
+                <p className="text-[11px] text-[#6B7280]">Restore all settings to defaults. User data is unaffected.</p>
+              </div>
+              <button onClick={()=>onDanger('factory-reset')} disabled={!canEdit}
+                className="text-[12px] border border-red-300 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 transition disabled:opacity-40 shrink-0 ml-4">
+                Factory Reset
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
-};
+}
 
-// ─── Main Settings page ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN PAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+const TABS = [
+  { key: 'general',       label: 'General',       Icon: SlidersHorizontal },
+  { key: 'security',      label: 'Security',      Icon: Shield },
+  { key: 'notifications', label: 'Notifications', Icon: Bell },
+  { key: 'branding',      label: 'Branding',      Icon: Palette },
+  { key: 'system',        label: 'System',        Icon: Server },
+];
+
 export default function Settings() {
+  const navigate = useNavigate();
   const { hasPermission, user } = useAuth();
-
-  const canRead   = hasPermission('Settings', 'read');
-  const canEdit   = hasPermission('Settings', 'update');
+  const canRead      = hasPermission('Settings', 'read');
+  const canEdit      = hasPermission('Settings', 'update');
   const isSuperAdmin = user?.role?.slug === 'super-admin';
 
-  const [settings,         setSettings]         = useState(null);
-  const [originalSettings, setOriginalSettings] = useState(null);
-  const [activeTab,        setActiveTab]        = useState('general');
-  const [isDirty,          setIsDirty]          = useState(false);
-  const [saving,           setSaving]           = useState(false);
-  const [loading,          setLoading]          = useState(true);
-  const [saveError,        setSaveError]        = useState('');
-  const [saveSuccess,      setSaveSuccess]      = useState(false);
-  const [validationErrors, setValidationErrors] = useState({});
-  const [dangerAction,     setDangerAction]     = useState(null);
-  const [dangerLoading,    setDangerLoading]    = useState(false);
+  const [settings,  setSettings]  = useState(null);
+  const [original,  setOriginal]  = useState(null);
+  const [tab,       setTab]       = useState('general');
+  const [dirty,     setDirty]     = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [saveErr,   setSaveErr]   = useState('');
+  const [saved,     setSaved]     = useState(false);
+  const [valErrs,   setValErrs]   = useState({});
+  const [danger,    setDanger]    = useState(null);
+  const [dangerBusy,setDangerBusy]= useState(false);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -957,319 +665,195 @@ export default function Settings() {
     (async () => {
       setLoading(true);
       try {
-        const res = await adminAPI.getSettings();
-        const data = res.data.data;
-        setSettings(data);
-        setOriginalSettings(JSON.parse(JSON.stringify(data)));
-      } catch (err) {
-        console.error('Failed to load settings', err);
-      } finally {
-        setLoading(false);
-      }
+        const r = await adminAPI.getSettings();
+        setSettings(r.data.data);
+        setOriginal(JSON.parse(JSON.stringify(r.data.data)));
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
     })();
   }, [canRead]);
 
-  // ── Update field helper ───────────────────────────────────────────────────
+  // ── updateField ───────────────────────────────────────────────────────────
   const updateField = (section, field, value) => {
-    setSettings(prev => ({
-      ...prev,
-      [section]: { ...prev[section], [field]: value },
-    }));
-    setIsDirty(true);
-    setSaveError('');
-    const key = `${section}.${field}`;
-    if (validationErrors[key]) {
-      setValidationErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
-    }
+    setSettings(p => ({ ...p, [section]: { ...p[section], [field]: value } }));
+    setDirty(true); setSaveErr('');
+    const k = `${section}.${field}`;
+    if (valErrs[k]) setValErrs(p => { const n={...p}; delete n[k]; return n; });
   };
-
-  // Section-scoped updater factory
-  const updater = (section) => (field, value) => updateField(section, field, value);
+  const upd = (section) => (field, value) => updateField(section, field, value);
 
   // ── Validate ──────────────────────────────────────────────────────────────
   const validate = () => {
-    const errors = {};
-    const s = settings.security;
-    const g = settings.general;
-    const sys = settings.system;
-    const n = settings.notifications;
-
-    if ((s.minPasswordLength ?? 8) < 6 || (s.minPasswordLength ?? 8) > 32)
-      errors['security.minPasswordLength'] = 'Must be between 6 and 32';
-    if ((g.itemsPerPage ?? 25) < 10 || (g.itemsPerPage ?? 25) > 100)
-      errors['general.itemsPerPage'] = 'Must be between 10 and 100';
-    if ((sys.apiRateLimit ?? 100) < 10 || (sys.apiRateLimit ?? 100) > 1000)
-      errors['system.apiRateLimit'] = 'Must be between 10 and 1000';
-    if (n.fromEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(n.fromEmail))
-      errors['notifications.fromEmail'] = 'Invalid email format';
-
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+    const e = {};
+    const { security: s, general: g, system: sys, notifications: n } = settings;
+    if ((s.minPasswordLength??8)<6||(s.minPasswordLength??8)>32)    e['security.minPasswordLength']='Must be 6–32';
+    if ((g.itemsPerPage??25)<10||(g.itemsPerPage??25)>100)           e['general.itemsPerPage']='Must be 10–100';
+    if ((sys.apiRateLimit??100)<10||(sys.apiRateLimit??100)>1000)    e['system.apiRateLimit']='Must be 10–1000';
+    if (n.fromEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(n.fromEmail)) e['notifications.fromEmail']='Invalid email';
+    setValErrs(e);
+    return Object.keys(e).length === 0;
   };
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!validate()) {
-      const firstKey = Object.keys(validationErrors)[0];
-      if (firstKey) setActiveTab(firstKey.split('.')[0]);
+      const first = Object.keys(valErrs)[0];
+      if (first) setTab(first.split('.')[0]);
       return;
     }
-    setSaving(true);
-    setSaveError('');
+    setSaving(true); setSaveErr('');
     try {
       const payload = JSON.parse(JSON.stringify(settings));
       if (!payload.notifications?.smtpPass) delete payload.notifications.smtpPass;
-
-      const res = await adminAPI.saveSettings(payload);
-      const saved = res.data.data;
-      setSettings(saved);
-      setOriginalSettings(JSON.parse(JSON.stringify(saved)));
-      setIsDirty(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
-      setSaveError(err.response?.data?.message || 'Failed to save. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+      const r = await adminAPI.saveSettings(payload);
+      const d = r.data.data;
+      setSettings(d); setOriginal(JSON.parse(JSON.stringify(d)));
+      setDirty(false); setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setSaveErr(e.response?.data?.message || 'Save failed. Please try again.');
+    } finally { setSaving(false); }
   };
 
   // ── Cancel ────────────────────────────────────────────────────────────────
   const handleCancel = async () => {
     try {
-      const res = await adminAPI.getSettings();
-      const data = res.data.data;
-      setSettings(data);
-      setOriginalSettings(JSON.parse(JSON.stringify(data)));
-    } catch {
-      setSettings(JSON.parse(JSON.stringify(originalSettings)));
-    }
-    setIsDirty(false);
-    setSaveError('');
-    setValidationErrors({});
+      const r = await adminAPI.getSettings();
+      setSettings(r.data.data);
+      setOriginal(JSON.parse(JSON.stringify(r.data.data)));
+    } catch { setSettings(JSON.parse(JSON.stringify(original))); }
+    setDirty(false); setSaveErr(''); setValErrs({});
   };
 
-  // ── Danger actions ────────────────────────────────────────────────────────
+  // ── Danger ────────────────────────────────────────────────────────────────
   const handleDangerConfirm = async () => {
-    setDangerLoading(true);
+    setDangerBusy(true);
     try {
-      if (dangerAction === 'factory-reset') {
+      if (danger === 'factory-reset') {
         await adminAPI.resetSettings();
-        const res = await adminAPI.getSettings();
-        const data = res.data.data;
-        setSettings(data);
-        setOriginalSettings(JSON.parse(JSON.stringify(data)));
-        setIsDirty(false);
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-      } else if (dangerAction === 'reset-passwords') {
-        // Future endpoint — show informational message
-        setSaveSuccess(false);
-        setSaveError('Force password reset is not yet implemented.');
+        const r = await adminAPI.getSettings();
+        const d = r.data.data;
+        setSettings(d); setOriginal(JSON.parse(JSON.stringify(d)));
+        setDirty(false); setSaved(true); setTimeout(() => setSaved(false), 3000);
+      } else {
+        setSaveErr('Force password reset is not yet available.');
       }
-    } catch (err) {
-      setSaveError(err.response?.data?.message || 'Action failed.');
-    } finally {
-      setDangerLoading(false);
-      setDangerAction(null);
-    }
+    } catch(e) { setSaveErr(e.response?.data?.message||'Action failed.'); }
+    finally { setDangerBusy(false); setDanger(null); }
   };
 
-  // ── Tab dirty detection ───────────────────────────────────────────────────
-  const tabHasDiff = (tab) => {
-    if (!settings || !originalSettings) return false;
-    return JSON.stringify(settings[tab]) !== JSON.stringify(originalSettings[tab]);
-  };
-  const tabHasError = (tab) =>
-    Object.keys(validationErrors).some(k => k.startsWith(tab + '.'));
+  // ── Tab state ─────────────────────────────────────────────────────────────
+  const tabDirty = (k) => settings && original && JSON.stringify(settings[k]) !== JSON.stringify(original[k]);
+  const tabErr   = (k) => Object.keys(valErrs).some(e => e.startsWith(k+'.'));
 
-  // ── Permission guard ──────────────────────────────────────────────────────
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (!canRead) return <AccessDenied />;
-
-  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading || !settings) return (
-    <div className="p-6 pb-24">
-      <h1 className="text-xl font-bold text-[#0F172A] mb-6">Settings</h1>
-      <SettingsSkeleton />
+    <div className="p-6">
+      <div className="flex items-center gap-2 text-[13px] text-[#6B7280] mb-5">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1 hover:text-[#111827] transition"><ChevronLeft size={14}/>Back</button>
+        <span className="text-[#D1D5DB]">/</span><span className="text-[#111827] font-medium">Settings</span>
+      </div>
+      <Skeleton/>
     </div>
   );
 
-  const TABS = [
-    { key: 'general',       label: 'General',       Icon: SlidersHorizontal },
-    { key: 'security',      label: 'Security',      Icon: Shield },
-    { key: 'notifications', label: 'Notifications', Icon: Bell },
-    { key: 'branding',      label: 'Branding',      Icon: Palette },
-    { key: 'system',        label: 'System',        Icon: Server },
-  ];
-
   return (
-    <div className="p-6 pb-28">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-[#0F172A]">Settings</h1>
-        <p className="text-sm text-[#64748B] mt-0.5">Configure system-wide settings for your OWMS installation.</p>
+    <div className="p-6 pb-20">
+      {/* Breadcrumb / back */}
+      <div className="flex items-center gap-2 text-[13px] text-[#6B7280] mb-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1 hover:text-[#111827] transition font-medium"
+        >
+          <ChevronLeft size={14}/>Back
+        </button>
+        <span className="text-[#D1D5DB]">/</span>
+        <span className="text-[#9CA3AF]">Admin</span>
+        <span className="text-[#D1D5DB]">/</span>
+        <span className="text-[#111827] font-medium">Settings</span>
       </div>
 
-      <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden flex min-h-[640px]">
+      {/* Page title row */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-[17px] font-bold text-[#111827]">Settings</h1>
+          <p className="text-[12px] text-[#9CA3AF] mt-0.5">System-wide configuration for your OWMS installation</p>
+        </div>
+        {dirty && (
+          <span className="flex items-center gap-1.5 text-[12px] text-amber-600 font-medium bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"/>
+            Unsaved changes
+          </span>
+        )}
+      </div>
 
-        {/* ── Left nav ── */}
-        <div className="w-56 min-w-[224px] bg-[#F8FAFC] border-r border-[#E2E8F0] p-3 flex flex-col shrink-0">
-          <p className="text-[10px] font-semibold text-[#94A3B8] tracking-widest px-3 py-2 mb-1">CONFIGURATION</p>
-          <div className="space-y-0.5">
-            {TABS.map(({ key, label, Icon }) => {
-              const active = activeTab === key;
-              const hasErr = tabHasError(key);
-              const dirty  = tabHasDiff(key);
-              return (
-                <button
-                  key={key}
-                  onClick={() => setActiveTab(key)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left
-                    ${active
-                      ? 'bg-[#EFF6FF] text-[#2563EB] font-medium'
-                      : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A]'}
-                  `}
-                >
-                  <Icon size={15} className={active ? 'text-[#2563EB]' : 'text-[#94A3B8]'} />
-                  <span className="flex-1">{label}</span>
-                  {hasErr && <span className="w-2 h-2 rounded-full bg-[#DC2626] shrink-0" />}
-                  {!hasErr && dirty && <span className="w-2 h-2 rounded-full bg-[#D97706] shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-
-          {isDirty && (
-            <div className="mt-auto mx-2 mb-2 bg-[#FEF3C7] border border-[#FDE68A] rounded-lg p-3">
-              <div className="flex items-center gap-1.5 text-xs text-[#92400E]">
-                <AlertTriangle size={11} />
-                <span className="font-medium">Unsaved changes</span>
-              </div>
-            </div>
-          )}
+      {/* Main panel */}
+      <div className="bg-white rounded-lg border border-[#E5E7EB] flex overflow-hidden" style={{ minHeight: 560 }}>
+        {/* Left nav */}
+        <div className="w-44 shrink-0 bg-[#F9FAFB] border-r border-[#E5E7EB] p-2.5">
+          <p className="text-[10px] font-semibold text-[#9CA3AF] tracking-widest px-2 py-1.5 mb-1">CONFIGURATION</p>
+          {TABS.map(({ key, label, Icon }) => {
+            const active = tab === key;
+            const hasErr = tabErr(key);
+            const hasDiff = tabDirty(key);
+            return (
+              <button key={key} onClick={() => setTab(key)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-colors text-left mb-0.5
+                  ${active ? 'bg-white border border-[#E5E7EB] text-[#111827] font-medium shadow-sm'
+                           : 'text-[#6B7280] hover:bg-white hover:text-[#111827]'}`}
+              >
+                <Icon size={14} className={active ? 'text-[#2563EB]' : 'text-[#9CA3AF]'}/>
+                <span className="flex-1">{label}</span>
+                {hasErr  && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"/>}
+                {!hasErr && hasDiff && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"/>}
+              </button>
+            );
+          })}
         </div>
 
-        {/* ── Content ── */}
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, x: 8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.15 }}
-            >
-              {activeTab === 'general' && (
-                <GeneralTab
-                  s={settings.general}
-                  update={updater('general')}
-                  errors={validationErrors}
-                  canEdit={canEdit}
-                />
-              )}
-              {activeTab === 'security' && (
-                <SecurityTab
-                  s={settings.security}
-                  update={updater('security')}
-                  errors={validationErrors}
-                  canEdit={canEdit}
-                />
-              )}
-              {activeTab === 'notifications' && (
-                <NotificationsTab
-                  s={settings.notifications}
-                  update={updater('notifications')}
-                  errors={validationErrors}
-                  canEdit={canEdit}
-                  userEmail={user?.email || ''}
-                />
-              )}
-              {activeTab === 'branding' && (
-                <BrandingTab
-                  s={settings.branding}
-                  update={updater('branding')}
-                  canEdit={canEdit}
-                />
-              )}
-              {activeTab === 'system' && (
-                <SystemTab
-                  s={settings.system}
-                  update={updater('system')}
-                  canEdit={canEdit}
-                  isSuperAdmin={isSuperAdmin}
-                  onDangerAction={setDangerAction}
-                  updatedAt={settings.updatedAt}
-                />
-              )}
+            <motion.div key={tab} initial={{opacity:0,x:6}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-6}} transition={{duration:0.12}}>
+              {tab === 'general'       && <GeneralTab       s={settings.general}       upd={upd('general')}       err={valErrs} canEdit={canEdit}/>}
+              {tab === 'security'      && <SecurityTab      s={settings.security}      upd={upd('security')}      err={valErrs} canEdit={canEdit}/>}
+              {tab === 'notifications' && <NotificationsTab s={settings.notifications} upd={upd('notifications')} err={valErrs} canEdit={canEdit} userEmail={user?.email||''}/>}
+              {tab === 'branding'      && <BrandingTab      s={settings.branding}      upd={upd('branding')}      canEdit={canEdit}/>}
+              {tab === 'system'        && <SystemTab        s={settings.system}        upd={upd('system')}        err={valErrs} canEdit={canEdit} isSuperAdmin={isSuperAdmin} onDanger={setDanger} updatedAt={settings.updatedAt}/>}
             </motion.div>
           </AnimatePresence>
         </div>
       </div>
 
-      {/* ── Sticky footer bar ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E2E8F0] px-8 py-4 flex items-center justify-between gap-4">
-        {/* Left status */}
-        <div className="flex items-center gap-2 min-w-0">
-          {isDirty && !saveSuccess && (
-            <span className="flex items-center gap-2 text-sm text-[#D97706] font-medium">
-              <span className="w-2 h-2 rounded-full bg-[#D97706] animate-pulse shrink-0" />
-              You have unsaved changes
-            </span>
-          )}
-          {saveSuccess && (
-            <span className="flex items-center gap-2 text-sm text-[#16A34A] font-medium">
-              <CheckCircle2 size={16} />
-              All changes saved successfully
-            </span>
-          )}
-          {!isDirty && !saveSuccess && (
-            <span className="text-sm text-[#64748B]">Settings are up to date</span>
-          )}
+      {/* Footer */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E5E7EB] px-6 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0 text-[13px]">
+          {saved    && <span className="flex items-center gap-1.5 text-green-600 font-medium"><CheckCircle2 size={14}/>Saved successfully</span>}
+          {!saved && !dirty && <span className="text-[#9CA3AF]">All settings saved</span>}
         </div>
-
-        {/* Center — save error */}
-        {saveError && (
-          <div className="flex items-center gap-2 text-sm text-[#DC2626]">
-            <AlertCircle size={14} className="shrink-0" />
-            <span className="truncate max-w-xs">{saveError}</span>
-            <button onClick={() => setSaveError('')}><X size={13} /></button>
+        {saveErr && (
+          <div className="flex items-center gap-1.5 text-[12px] text-red-500 max-w-xs truncate">
+            <AlertCircle size={13} className="shrink-0"/>
+            <span className="truncate">{saveErr}</span>
+            <button onClick={()=>setSaveErr('')}><X size={12}/></button>
           </div>
         )}
-
-        {/* Right — actions */}
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={handleCancel}
-            disabled={!isDirty}
-            className="border border-[#E2E8F0] text-[#64748B] px-4 py-2 rounded-lg text-sm hover:bg-[#F8FAFC] transition
-              disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Cancel Changes
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={handleCancel} disabled={!dirty}
+            className="px-3 py-1.5 text-[13px] border border-[#D1D5DB] text-[#6B7280] rounded-md hover:bg-[#F9FAFB] transition disabled:opacity-40 disabled:cursor-not-allowed">
+            Discard
           </button>
-          <button
-            onClick={handleSave}
-            disabled={!isDirty || saving || !canEdit}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white transition
-              ${isDirty && !saving && canEdit
-                ? 'bg-[#2563EB] hover:bg-[#1D4ED8]'
-                : 'bg-[#94A3B8] cursor-not-allowed'}
-            `}
-          >
-            {saving
-              ? <><RefreshCw size={14} className="animate-spin" /> Saving…</>
-              : <><Save size={14} /> Save Configuration</>
-            }
+          <button onClick={handleSave} disabled={!dirty||saving||!canEdit}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-[13px] font-medium text-white rounded-md transition
+              ${dirty&&!saving&&canEdit ? 'bg-[#2563EB] hover:bg-[#1D4ED8]' : 'bg-[#94A3B8] cursor-not-allowed'}`}>
+            {saving ? <><RefreshCw size={12} className="animate-spin"/>Saving…</> : <><Save size={12}/>Save Changes</>}
           </button>
         </div>
       </div>
 
-      {/* ── Danger Modal ── */}
-      {dangerAction && (
-        <DangerModal
-          action={dangerAction}
-          onCancel={() => setDangerAction(null)}
-          onConfirm={handleDangerConfirm}
-          loading={dangerLoading}
-        />
+      {danger && (
+        <DangerModal action={danger} onCancel={()=>setDanger(null)} onConfirm={handleDangerConfirm} loading={dangerBusy}/>
       )}
     </div>
   );
