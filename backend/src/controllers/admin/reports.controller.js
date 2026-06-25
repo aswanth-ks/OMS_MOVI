@@ -285,7 +285,8 @@ export const exportReport = async (req, res, next) => {
     const filters    = {};  // full export — no filters
     const result     = await generateReport(report.generatorKey, filters);
     const exportedAt = new Date().toISOString().slice(0, 10);
-    const safeName   = report.name.replace(/[^a-z0-9]+/gi, '_');
+    // Keep readable name — only strip filesystem-unsafe chars
+    const safeName   = report.name.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim();
 
     if (format === 'pdf') {
       const pdfBuf = await buildPdf(report.name, filters, result);
@@ -690,33 +691,51 @@ function buildPdf(title, filters, result) {
     const cols    = result.columns || [];
     const keys    = result.columnKeys || cols;
     const rows    = result.rows || [];
-    const HDR_H   = 20;
-    const ROW_H   = 15;
+    const HDR_H   = 22;
+    const CELL_PAD_V = 5;   // top + bottom padding inside each cell
+    const CELL_PAD_H = 6;   // left padding
     const FONT_SZ = 7.2;
+    const LINE_H  = FONT_SZ * 1.35;
+    const MIN_ROW_H = 17;
+    const MAX_LINES = 6;     // cap: never let a row exceed 6 lines (~50pt)
 
     if (cols.length === 0 || rows.length === 0) {
       doc.fillColor(C_GRAY).font('Helvetica').fontSize(11).text('No data to display.', { align: 'center' });
     } else {
       // Proportional column widths
       const weights = keys.map(k => {
-        if (k === 'permissions' || k === 'email') return 3.0;
-        if (k === 'name' || k === 'user')         return 2.0;
-        if (k === 'timestamp')                     return 2.2;
-        if (k === 'ipAddress' || k === 'device')   return 1.6;
-        if (k === 'description')                   return 2.5;
+        if (k === 'permissions')               return 4.0;
+        if (k === 'email')                     return 2.5;
+        if (k === 'name' || k === 'user')      return 2.0;
+        if (k === 'timestamp')                 return 2.2;
+        if (k === 'ipAddress' || k === 'device') return 1.5;
+        if (k === 'description')               return 2.5;
         return 1.0;
       });
       const weightTotal = weights.reduce((a, b) => a + b, 0);
       const colWidths   = weights.map(w => (w / weightTotal) * CW);
 
+      // Helper: compute display value for a cell
+      const cellVal = (row, key) => {
+        const raw = row[key];
+        return raw !== undefined && raw !== null && raw !== '' ? String(raw) : '—';
+      };
+
+      // Helper: compute the height a cell value will occupy (capped at MAX_LINES)
+      const cellHeight = (val, colW, font) => {
+        doc.font(font).fontSize(FONT_SZ);
+        const h = doc.heightOfString(val, { width: colW - CELL_PAD_H * 2, lineBreak: true });
+        const capped = Math.min(h, LINE_H * MAX_LINES);
+        return Math.max(MIN_ROW_H - CELL_PAD_V * 2, capped);
+      };
+
       const drawHeader = (ty) => {
-        let cx = M;
-        // Header background bar
         doc.rect(M, ty, CW, HDR_H).fill(C_BLUE);
+        let cx = M;
         cols.forEach((col, i) => {
           doc.fillColor('white').font('Helvetica-Bold').fontSize(FONT_SZ - 0.5)
-            .text(col.toUpperCase(), cx + 5, ty + 6, {
-              width:     colWidths[i] - 10,
+            .text(col.toUpperCase(), cx + CELL_PAD_H, ty + 7, {
+              width:     colWidths[i] - CELL_PAD_H * 2,
               lineBreak: false,
               ellipsis:  true,
             });
@@ -729,7 +748,17 @@ function buildPdf(title, filters, result) {
       tableY = drawHeader(tableY);
 
       rows.slice(0, 2000).forEach((row, ri) => {
-        if (tableY + ROW_H > PH - 50) {
+        // Pre-compute values and row height
+        const vals = keys.map(k => cellVal(row, k));
+        const contentHeights = keys.map((k, i) => {
+          const font = (k === 'status' || k === 'result') ? 'Helvetica-Bold' : 'Helvetica';
+          return cellHeight(vals[i], colWidths[i], font);
+        });
+        const contentH = Math.max(...contentHeights);
+        const rowH     = contentH + CELL_PAD_V * 2;
+
+        // New page if this row won't fit
+        if (tableY + rowH > PH - 50) {
           doc.addPage();
           drawPageHeader();
           tableY = 60;
@@ -739,50 +768,51 @@ function buildPdf(title, filters, result) {
         const bg = ri % 2 === 0 ? 'white' : C_LGRAY;
         let cx = M;
 
-        // Draw full row background
-        doc.rect(M, tableY, CW, ROW_H).fill(bg)
-          .rect(M, tableY, CW, ROW_H).strokeColor(C_BORD).lineWidth(0.2).stroke();
+        // Row background + border
+        doc.rect(M, tableY, CW, rowH).fill(bg)
+           .rect(M, tableY, CW, rowH).strokeColor(C_BORD).lineWidth(0.2).stroke();
 
-        cols.forEach((col, i) => {
-          const key    = keys[i];
-          const raw    = row[key];
-          const full   = raw !== undefined && raw !== null && raw !== '' ? String(raw) : '—';
+        // Render each cell
+        cols.forEach((_col, i) => {
+          const key = keys[i];
+          const val = vals[i];
 
-          // Truncate long values to prevent pdfkit overflow
-          const maxChars = key === 'permissions' ? 60 : 80;
-          const val = full.length > maxChars ? full.slice(0, maxChars) + '…' : full;
-
-          // Cell divider
           if (i > 0) {
-            doc.moveTo(cx, tableY).lineTo(cx, tableY + ROW_H).strokeColor(C_BORD).lineWidth(0.2).stroke();
+            doc.moveTo(cx, tableY).lineTo(cx, tableY + rowH).strokeColor(C_BORD).lineWidth(0.2).stroke();
           }
 
-          // Value color
           let textColor = C_DARK;
           let bold      = false;
           if (key === 'status' || key === 'result') {
-            if (['Active', 'SUCCESS'].includes(val))                       { textColor = C_GREEN; bold = true; }
-            else if (['Inactive', 'Terminated', 'FAILED'].includes(val))   { textColor = C_RED;   bold = true; }
-            else if (['On Leave', 'Suspended', 'Pending'].includes(val))   { textColor = C_AMBER; bold = true; }
+            if (['Active', 'SUCCESS'].includes(val))                     { textColor = C_GREEN; bold = true; }
+            else if (['Inactive', 'Terminated', 'FAILED'].includes(val)) { textColor = C_RED;   bold = true; }
+            else if (['On Leave', 'Suspended', 'Pending'].includes(val)) { textColor = C_AMBER; bold = true; }
           }
+
+          // Cap text at MAX_LINES to prevent overflow beyond row boundary
+          const maxH    = LINE_H * MAX_LINES;
+          const cellW   = colWidths[i] - CELL_PAD_H * 2;
 
           doc.fillColor(textColor)
             .font(bold ? 'Helvetica-Bold' : 'Helvetica')
             .fontSize(FONT_SZ)
-            .text(val, cx + 4, tableY + 4, {
-              width:     colWidths[i] - 8,
-              lineBreak: false,
+            .text(val, cx + CELL_PAD_H, tableY + CELL_PAD_V, {
+              width:     cellW,
+              height:    maxH,
+              lineBreak: true,
               ellipsis:  true,
             });
+
           cx += colWidths[i];
         });
-        tableY += ROW_H;
+
+        tableY += rowH;
       });
 
       if (rows.length > 2000) {
         doc.y = tableY + 4;
         doc.fillColor(C_GRAY).font('Helvetica').fontSize(7.5)
-          .text(`... and ${rows.length - 2000} additional records (page limit reached)`);
+          .text(`... and ${rows.length - 2000} additional records (export limit reached)`);
       }
     }
 
