@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
+import AccessDenied from '../../components/shared/AccessDenied';
 import { Eye, Plus, Calendar, User, Layers } from 'lucide-react';
 import { pmoAPI, adminAPI } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,7 +9,9 @@ import toast from 'react-hot-toast';
 
 export default function PMOProjects() {
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, hasPermission } = useAuth();
+  const canRead          = hasPermission('Projects', 'read');
+  const canCreateProject = hasPermission('Projects', 'create');
   
   const [projects, setProjects] = useState([]);
   const [availableEmployees, setAvailableEmployees] = useState([]);
@@ -225,6 +228,8 @@ export default function PMOProjects() {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view projects." /></PageWrapper>;
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-full gap-8 max-w-[1400px] mx-auto pb-12 relative">
@@ -237,18 +242,20 @@ export default function PMOProjects() {
               Manage your isolated project teams, requests, and timelines.
             </p>
           </div>
-          <button 
-            onClick={() => {
-              if (departments.length > 0 && !newProject.department) {
-                setNewProject(prev => ({ ...prev, department: departments[0]._id || departments[0] }));
-              }
-              setIsWizardOpen(true);
-            }}
-            className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            New Project
-          </button>
+          {canCreateProject && (
+            <button
+              onClick={() => {
+                if (departments.length > 0 && !newProject.department) {
+                  setNewProject(prev => ({ ...prev, department: departments[0]._id || departments[0] }));
+                }
+                setIsWizardOpen(true);
+              }}
+              className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              New Project
+            </button>
+          )}
         </div>
 
         {/* FILTERS & SEARCH */}

@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import PageWrapper from '../../components/PageWrapper';
 import { hrAPI } from '../../utils/api';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 const STATUS_COLORS = {
   'Active': 'bg-[#16A34A]/10 text-[#16A34A]',
@@ -11,6 +13,8 @@ const STATUS_COLORS = {
 };
 
 export default function HRInterns() {
+  const { hasPermission } = useAuth();
+  const canRead = hasPermission('Interns', 'read');
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUniversity, setFilterUniversity] = useState('');
@@ -68,6 +72,8 @@ export default function HRInterns() {
     
     return matchesSearch && matchesUniv && matchesStatus;
   }), [interns, filterUniversity, filterStatus, searchTerm]);
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view interns." /></PageWrapper>;
 
   return (
     <PageWrapper>

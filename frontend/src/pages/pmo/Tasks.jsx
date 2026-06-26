@@ -5,6 +5,8 @@ import { TaskDetailModal } from '../../components/pmo/TaskDetailModal';
 import { GraduationCap, X } from 'lucide-react';
 import { pmoAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 const COLUMNS = [
   { id: 'backlog', title: 'Backlog', color: 'border-l-[#64748B]' },
@@ -36,6 +38,7 @@ const STATUS_MAP_BE_TO_FE = {
 };
 
 export default function PMOTaskBoard() {
+  const { hasPermission } = useAuth();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('');
@@ -200,6 +203,11 @@ export default function PMOTaskBoard() {
     return pool;
   };
 
+  const canRead = hasPermission('Tasks', 'read');
+  const canCreate = hasPermission('Tasks', 'create');
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view the task board." /></PageWrapper>;
+
   return (
     <PageWrapper>
       <div className="font-sans text-[#0F172A] w-full flex flex-col h-[calc(100vh-100px)] overflow-hidden gap-6 max-w-[1600px] mx-auto pb-4 text-left">
@@ -226,21 +234,23 @@ export default function PMOTaskBoard() {
               <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-[#64748B] text-[18px] pointer-events-none">expand_more</span>
             </div>
 
-            <button 
-              onClick={() => {
-                const pool = getResourcePool();
-                if (pool.length === 0) {
-                  toast.error('No team members assigned to this project yet.');
-                  return;
-                }
-                setNewTaskData(prev => ({ ...prev, assignedTo: pool[0].id }));
-                setIsCreateModalOpen(true);
-              }}
-              className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              New Task
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => {
+                  const pool = getResourcePool();
+                  if (pool.length === 0) {
+                    toast.error('No team members assigned to this project yet.');
+                    return;
+                  }
+                  setNewTaskData(prev => ({ ...prev, assignedTo: pool[0].id }));
+                  setIsCreateModalOpen(true);
+                }}
+                className="bg-[#2563EB] text-white px-5 py-2 rounded-lg text-[13px] font-medium hover:bg-[#1D4ED8] transition-colors shadow-sm flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">add</span>
+                New Task
+              </button>
+            )}
           </div>
         </div>
 

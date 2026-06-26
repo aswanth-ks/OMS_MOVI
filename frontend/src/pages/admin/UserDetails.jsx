@@ -4,6 +4,7 @@ import { Copy, Check, ExternalLink, Mail, Phone, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageWrapper from '../../components/PageWrapper';
 import { adminAPI, hrAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -116,8 +117,13 @@ const PersonChip = ({ person, label }) => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminUserDetails() {
-  const navigate   = useNavigate();
-  const { id }     = useParams();
+  const navigate        = useNavigate();
+  const { id }          = useParams();
+  const { hasPermission } = useAuth();
+
+  const canEdit   = hasPermission('Users', 'update');
+  const canManage = hasPermission('Users', 'manage');
+  const canDelete = hasPermission('Users', 'delete');
 
   const [activeTab, setActiveTab] = useState('overview');
   const [user, setUser]           = useState(null);
@@ -306,29 +312,33 @@ export default function AdminUserDetails() {
                 </div>
               </div>
 
-              {/* Action buttons */}
+              {/* Action buttons — shown only when user has permission */}
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                <button
-                  onClick={() => navigate(`/admin/users/${id}/edit`)}
-                  className="border border-[#E2E8F0] bg-white text-[#0F172A] px-3.5 py-1.5 rounded-lg text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-1.5 shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-[16px]">edit</span> Edit
-                </button>
-                <button
-                  onClick={handleToggleStatus}
-                  disabled={togglingStatus}
-                  className={`border px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-60 ${
-                    isActive
-                      ? 'border-[#E2E8F0] bg-white text-[#DC2626] hover:bg-[#FEF2F2]'
-                      : 'border-[#16A34A]/40 bg-white text-[#16A34A] hover:bg-[#F0FDF4]'
-                  }`}
-                >
-                  {togglingStatus
-                    ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    : <span className="material-symbols-outlined text-[16px]">{isActive ? 'block' : 'check_circle'}</span>
-                  }
-                  {isActive ? 'Deactivate' : 'Activate'}
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => navigate(`/admin/users/${id}/edit`)}
+                    className="border border-[#E2E8F0] bg-white text-[#0F172A] px-3.5 py-1.5 rounded-lg text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">edit</span> Edit
+                  </button>
+                )}
+                {canManage && (
+                  <button
+                    onClick={handleToggleStatus}
+                    disabled={togglingStatus}
+                    className={`border px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-60 ${
+                      isActive
+                        ? 'border-[#E2E8F0] bg-white text-[#DC2626] hover:bg-[#FEF2F2]'
+                        : 'border-[#16A34A]/40 bg-white text-[#16A34A] hover:bg-[#F0FDF4]'
+                    }`}
+                  >
+                    {togglingStatus
+                      ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      : <span className="material-symbols-outlined text-[16px]">{isActive ? 'block' : 'check_circle'}</span>
+                    }
+                    {isActive ? 'Deactivate' : 'Activate'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -524,6 +534,7 @@ export default function AdminUserDetails() {
                 <InfoRow label="Last Login">{fmtDateTime(user.lastLogin)}</InfoRow>
                 <InfoRow label="Account Created">{fmtDate(user.createdAt)}</InfoRow>
 
+                {canManage && (
                 <div className="pt-4 border-t border-[#F1F5F9]">
                   <button
                     onClick={handleResetPassword}
@@ -554,6 +565,7 @@ export default function AdminUserDetails() {
                     </div>
                   )}
                 </div>
+                )}
               </SectionCard>
 
             </div>

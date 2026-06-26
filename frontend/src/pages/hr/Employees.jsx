@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import PageWrapper from '../../components/PageWrapper';
 import { hrAPI } from '../../utils/api';
+import AccessDenied from '../../components/shared/AccessDenied';
 
 const TYPE_COLORS = {
   'Full-time': 'bg-blue-100 text-blue-700',
@@ -17,7 +19,10 @@ const STATUS_COLORS = {
 };
 
 export default function Employees() {
+  const { hasPermission } = useAuth();
   const navigate = useNavigate();
+  const canRead   = hasPermission('Users', 'read');
+  const canExport = hasPermission('Users', 'export');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -68,6 +73,8 @@ export default function Employees() {
 
     return matchesSearch && matchesDept && matchesType && matchesStatus;
   }), [employees, filterDept, filterStatus, filterType, searchTerm]);
+
+  if (!canRead) return <PageWrapper><AccessDenied message="You don't have permission to view employees." /></PageWrapper>;
 
   return (
     <PageWrapper>
@@ -137,10 +144,12 @@ export default function Employees() {
           </div>
           
           <div className="flex items-center gap-3">
-            <button className="border border-[#E2E8F0] text-[#0F172A] px-3 py-1.5 rounded-md text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2">
-              <span className="material-symbols-outlined text-[16px]">download</span>
-              Export
-            </button>
+            {canExport && (
+              <button className="border border-[#E2E8F0] text-[#0F172A] px-3 py-1.5 rounded-md text-[13px] font-medium hover:bg-[#F8FAFC] transition-colors flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px]">download</span>
+                Export
+              </button>
+            )}
           </div>
         </div>
 

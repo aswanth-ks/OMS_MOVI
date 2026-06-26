@@ -9,11 +9,15 @@ import {
   FileText, Award, Zap
 } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
+import AccessDenied from '../../components/shared/AccessDenied';
 import { hrAPI, notificationAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function HRDashboard() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canApproveLeave = hasPermission('Leave', 'approve');
   const [loading, setLoading] = useState(true);
   const [headcount, setHeadcount] = useState(null);
   const [attendanceSummary, setAttendanceSummary] = useState(null);
@@ -373,6 +377,90 @@ export default function HRDashboard() {
               </div>
             </div>
 
+<<<<<<< HEAD
+=======
+            {/* PENDING LEAVES */}
+            <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm">
+              <div className="px-5 py-4 border-b border-[#E2E8F0] flex justify-between items-center">
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-[14px] font-bold text-[#0F172A]">Leave Approvals</h2>
+                  {leaves.length > 0 && (
+                    <span className="bg-[#FEF2F2] text-[#DC2626] text-[10px] font-bold px-2 py-0.5 rounded-sm">
+                      {leaves.length} Pending
+                    </span>
+                  )}
+                </div>
+                <button 
+                  onClick={() => navigate('/hr/attendance')}
+                  className="text-[12px] font-medium text-[#64748B] hover:text-[#0F172A]"
+                >
+                  View Calendar
+                </button>
+              </div>
+              
+              <div className="p-0">
+                <AnimatePresence>
+                  {leaves.length > 0 ? (
+                    <div className="flex flex-col">
+                      {leaves.map((leave, idx) => (
+                        <motion.div 
+                          key={leave._id}
+                          initial={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                          className={`p-3.5 flex items-center justify-between hover:bg-[#F8FAFC] transition-colors ${idx !== leaves.length - 1 ? 'border-b border-[#F1F5F9]' : ''}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 border border-[#E2E8F0] flex items-center justify-center text-[13px] font-bold text-[#0F172A] shrink-0">
+                              {leave.user?.name?.charAt(0) || 'U'}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="text-[13px] font-bold text-[#0F172A] truncate">{leave.user?.name || 'Employee'}</h3>
+                              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                <span className="bg-[#F1F5F9] text-[#475569] text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
+                                  {leave.type}
+                                </span>
+                                <span className="text-[11px] font-medium text-[#64748B] truncate">
+                                  {leave.days} days ({new Date(leave.fromDate).toLocaleDateString()} - {new Date(leave.toDate).toLocaleDateString()})
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                            <button
+                              onClick={() => canApproveLeave && handleLeaveAction(leave._id, 'Approved')}
+                              disabled={!canApproveLeave}
+                              title={canApproveLeave ? 'Approve' : 'You do not have permission to approve leave. Contact your administrator.'}
+                              className={`w-8 h-8 rounded flex items-center justify-center border transition-colors ${canApproveLeave ? 'text-[#16A34A] border-[#E2E8F0] hover:bg-[#DCFCE7] hover:border-[#16A34A]' : 'text-[#CBD5E1] border-[#E2E8F0] cursor-not-allowed'}`}
+                            >
+                              <Check size={14} strokeWidth={2.5} />
+                            </button>
+                            <button
+                              onClick={() => canApproveLeave && handleLeaveAction(leave._id, 'Rejected')}
+                              disabled={!canApproveLeave}
+                              title={canApproveLeave ? 'Reject' : 'You do not have permission to reject leave. Contact your administrator.'}
+                              className={`w-8 h-8 rounded flex items-center justify-center border transition-colors ${canApproveLeave ? 'text-[#DC2626] border-[#E2E8F0] hover:bg-[#FEF2F2] hover:border-[#DC2626]' : 'text-[#CBD5E1] border-[#E2E8F0] cursor-not-allowed'}`}
+                            >
+                              <X size={14} strokeWidth={2.5} />
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center flex flex-col items-center">
+                      <div className="w-12 h-12 bg-[#F1F5F9] rounded-full flex items-center justify-center mb-3">
+                        <Check className="text-[#10B981]" size={24} />
+                      </div>
+                      <h3 className="text-[14px] font-bold text-[#0F172A]">All Caught Up</h3>
+                      <p className="text-[12px] text-[#64748B] mt-1">No pending leave requests.</p>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+>>>>>>> f28aee497c9e806edad863367e6d187c2031d8a0
           </div>
 
           {/* RIGHT: CRITICAL ACTIONS & PENDING ITEMS */}
