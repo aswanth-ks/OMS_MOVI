@@ -25,7 +25,7 @@ export const requirePermission = (resource, action) => {
         });
       }
 
-      const permissionName = `${resource.toLowerCase().replace(/\s+/g, '-')}.${action}`;
+      const permissionName = `${resource.toLowerCase().replace(/\s+/g, '_')}.${action}`;
 
       // Super Admin bypasses ALL permission checks
       if (user.role.slug === 'super-admin') {

@@ -146,6 +146,7 @@ const Skeleton = ({ rows = 4, withBar = false }) => (
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
 
   const [loading, setLoading]         = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(null);
@@ -160,32 +161,53 @@ export default function AdminDashboard() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [uRes, aRes, dRes, rRes, lRes, fRes] = await Promise.all([
+      const canReadLogs = hasPermission('Audit Logs', 'read');
+      const promises = [
         adminAPI.getUsers({ limit: 1 }),
         adminAPI.getUsers({ status: 'Active', limit: 1 }),
         adminAPI.getDepartments(),
         adminAPI.getRoles(),
-        adminAPI.getAuditLogs({ limit: 50 }),
-        adminAPI.getAuditLogs({ result: 'FAILED', limit: 1 }),
-      ]);
+      ];
+
+      if (canReadLogs) {
+        promises.push(adminAPI.getAuditLogs({ limit: 50 }));
+        promises.push(adminAPI.getAuditLogs({ result: 'FAILED', limit: 1 }));
+      }
+
+      const results = await Promise.all(promises);
+
+      const uRes = results[0];
+      const aRes = results[1];
+      const dRes = results[2];
+      const rRes = results[3];
 
       setTotalUsers(uRes.data.pagination?.total ?? uRes.data.total ?? 0);
       setActiveUsers(aRes.data.pagination?.total ?? aRes.data.total ?? 0);
       setDepartments(dRes.data.data || []);
       setRoles(rRes.data.data || []);
-      setLogs(lRes.data.data || []);
-      setFailedTotal(fRes.data.pagination?.total ?? fRes.data.total ?? 0);
+
+      if (canReadLogs) {
+        const lRes = results[4];
+        const fRes = results[5];
+        setLogs(lRes.data.data || []);
+        setFailedTotal(fRes.data.pagination?.total ?? fRes.data.total ?? 0);
+      } else {
+        setLogs([]);
+        setFailedTotal(0);
+      }
+
       setLastRefreshed(new Date());
     } catch (err) {
       console.error('Dashboard fetch error:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hasPermission]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ── Derived values ──────────────────────────────────────────────────────────
+  const canReadLogs = hasPermission('Audit Logs', 'read');
 
   const inactiveUsers = (totalUsers != null && activeUsers != null)
     ? totalUsers - activeUsers
@@ -259,7 +281,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* ── Today's Summary Strip ───────────────────────────────────────────── */}
-        {!loading && logs.length > 0 && (() => {
+        {!loading && canReadLogs && logs.length > 0 && (() => {
           const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
           const todayLogs  = logs.filter(l => new Date(l.createdAt) >= todayStart);
           const todayFailed = todayLogs.filter(l => l.result === 'FAILED').length;
@@ -288,7 +310,7 @@ export default function AdminDashboard() {
         })()}
 
         {/* ── KPI Cards ───────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className={`grid grid-cols-2 sm:grid-cols-3 ${canReadLogs ? 'xl:grid-cols-5' : 'xl:grid-cols-4'} gap-4`}>
           <KpiCard
             label="Total Users"
             value={loading ? null : totalUsers}
@@ -334,18 +356,20 @@ export default function AdminDashboard() {
             loading={loading}
             onClick={() => navigate('/admin/roles')}
           />
-          <KpiCard
-            label="Security Alerts"
-            value={loading ? null : failedTotal}
-            sub={hasAlerts ? 'Failed access attempts' : 'No recorded alerts'}
-            subRed={hasAlerts}
-            icon={AlertTriangle}
-            topColor={hasAlerts ? 'bg-[#DC2626]' : 'bg-[#16A34A]'}
-            iconBg={hasAlerts ? 'bg-[#FEE2E2]' : 'bg-[#DCFCE7]'}
-            iconColor={hasAlerts ? 'text-[#DC2626]' : 'text-[#16A34A]'}
-            loading={loading}
-            onClick={() => navigate('/admin/audit?result=FAILED')}
-          />
+          {canReadLogs && (
+            <KpiCard
+              label="Security Alerts"
+              value={loading ? null : failedTotal}
+              sub={hasAlerts ? 'Failed access attempts' : 'No recorded alerts'}
+              subRed={hasAlerts}
+              icon={AlertTriangle}
+              topColor={hasAlerts ? 'bg-[#DC2626]' : 'bg-[#16A34A]'}
+              iconBg={hasAlerts ? 'bg-[#FEE2E2]' : 'bg-[#DCFCE7]'}
+              iconColor={hasAlerts ? 'text-[#DC2626]' : 'text-[#16A34A]'}
+              loading={loading}
+              onClick={() => navigate('/admin/audit?result=FAILED')}
+            />
+          )}
         </div>
 
         {/* ── Main Grid ───────────────────────────────────────────────────────── */}
@@ -355,63 +379,65 @@ export default function AdminDashboard() {
           <div className="lg:col-span-2 space-y-6">
 
             {/* Activity Timeline */}
-            <Card title="Recent Activity" action="View All" onAction={() => navigate('/admin/audit')}>
-              <div className="px-5 py-4">
-                {loading ? (
-                  <Skeleton rows={6} />
-                ) : timeline.length === 0 ? (
-                  <div className="py-10 text-center">
-                    <Clock size={30} className="text-[#CBD5E1] mx-auto mb-2" />
-                    <p className="text-[13px] text-[#94A3B8]">No recent activity to display</p>
-                  </div>
-                ) : (
-                  timeline.map((log, i) => (
-                    <div key={log._id} className="flex gap-3">
-                      {/* Timeline column */}
-                      <div className="flex flex-col items-center">
-                        <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${resultDot(log.result)}`} />
-                        {i < timeline.length - 1 && (
-                          <div className="w-px flex-1 bg-[#E2E8F0] my-1" />
-                        )}
-                      </div>
-                      {/* Content */}
-                      <div className={`flex-1 min-w-0 ${i < timeline.length - 1 ? 'pb-3.5' : ''}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${actionBadge(log.action)}`}>
-                                {log.action || 'Action'}
-                              </span>
-                              {log.module && (
-                                <span className="text-[11px] text-[#475569] bg-[#F1F5F9] px-1.5 py-0.5 rounded">
-                                  {log.module}
+            {canReadLogs && (
+              <Card title="Recent Activity" action="View All" onAction={() => navigate('/admin/audit')}>
+                <div className="px-5 py-4">
+                  {loading ? (
+                    <Skeleton rows={6} />
+                  ) : timeline.length === 0 ? (
+                    <div className="py-10 text-center">
+                      <Clock size={30} className="text-[#CBD5E1] mx-auto mb-2" />
+                      <p className="text-[13px] text-[#94A3B8]">No recent activity to display</p>
+                    </div>
+                  ) : (
+                    timeline.map((log, i) => (
+                      <div key={log._id} className="flex gap-3">
+                        {/* Timeline column */}
+                        <div className="flex flex-col items-center">
+                          <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${resultDot(log.result)}`} />
+                          {i < timeline.length - 1 && (
+                            <div className="w-px flex-1 bg-[#E2E8F0] my-1" />
+                          )}
+                        </div>
+                        {/* Content */}
+                        <div className={`flex-1 min-w-0 ${i < timeline.length - 1 ? 'pb-3.5' : ''}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${actionBadge(log.action)}`}>
+                                  {log.action || 'Action'}
                                 </span>
-                              )}
+                                {log.module && (
+                                  <span className="text-[11px] text-[#475569] bg-[#F1F5F9] px-1.5 py-0.5 rounded">
+                                    {log.module}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[13px] text-[#0F172A] mt-0.5 leading-snug">
+                                <span className="font-medium">
+                                  {log.user?.name || log.performedBy?.name || 'System'}
+                                </span>
+                                {log.details && (
+                                  <span className="text-[#64748B]">
+                                    {' — '}
+                                    {log.details.length > 70
+                                      ? `${log.details.slice(0, 70)}…`
+                                      : log.details}
+                                  </span>
+                                )}
+                              </p>
                             </div>
-                            <p className="text-[13px] text-[#0F172A] mt-0.5 leading-snug">
-                              <span className="font-medium">
-                                {log.user?.name || log.performedBy?.name || 'System'}
-                              </span>
-                              {log.details && (
-                                <span className="text-[#64748B]">
-                                  {' — '}
-                                  {log.details.length > 70
-                                    ? `${log.details.slice(0, 70)}…`
-                                    : log.details}
-                                </span>
-                              )}
-                            </p>
+                            <span className="text-[11px] text-[#94A3B8] shrink-0 whitespace-nowrap">
+                              {timeAgo(log.createdAt)}
+                            </span>
                           </div>
-                          <span className="text-[11px] text-[#94A3B8] shrink-0 whitespace-nowrap">
-                            {timeAgo(log.createdAt)}
-                          </span>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </Card>
+                    ))
+                  )}
+                </div>
+              </Card>
+            )}
 
             {/* User Distribution by Role */}
             <Card

@@ -3,10 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import PageWrapper from '../../components/PageWrapper';
 import { adminAPI } from '../../utils/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminEditUser() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { hasPermission } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '', email: '', phone: '', department: '',
@@ -22,12 +24,33 @@ export default function AdminEditUser() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [userRes, rolesRes, deptsRes] = await Promise.all([
-          adminAPI.getUser(id),
-          adminAPI.getRoles(),
-          adminAPI.getDepartments(),
-        ]);
+        const canReadRoles = hasPermission('Roles', 'read');
+        const canReadDepts = hasPermission('Departments', 'read');
+
+        const promises = [adminAPI.getUser(id)];
+        if (canReadRoles) promises.push(adminAPI.getRoles());
+        if (canReadDepts) promises.push(adminAPI.getDepartments());
+
+        const results = await Promise.all(promises);
+        const userRes = results[0];
         const u = userRes.data.data;
+
+        let rolesData = [];
+        let deptsData = [];
+        let resIdx = 1;
+
+        if (canReadRoles) {
+          rolesData = results[resIdx++].data.data || [];
+        } else if (u.role) {
+          rolesData = [u.role];
+        }
+
+        if (canReadDepts) {
+          deptsData = results[resIdx++].data.data || [];
+        } else if (u.department) {
+          deptsData = [u.department];
+        }
+
         setFormData({
           name:           u.name || '',
           email:          u.email || '',
@@ -38,8 +61,8 @@ export default function AdminEditUser() {
           role:           u.role?._id || u.role || '',
           status:         u.status || 'Active',
         });
-        setRoles(rolesRes.data.data || []);
-        setDepartments(deptsRes.data.data || []);
+        setRoles(rolesData);
+        setDepartments(deptsData);
       } catch (err) {
         toast.error('Failed to load user data');
       } finally {
@@ -47,7 +70,7 @@ export default function AdminEditUser() {
       }
     };
     load();
-  }, [id]);
+  }, [id, hasPermission]);
 
   const handleChange = (field) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -85,6 +108,9 @@ export default function AdminEditUser() {
 
   const inputCls  = 'w-full border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-[14px] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-colors';
   const selectCls = `${inputCls} bg-white appearance-none cursor-pointer`;
+
+  const canReadRoles = hasPermission('Roles', 'read');
+  const canReadDepts = hasPermission('Departments', 'read');
 
   if (fetching) {
     return (
@@ -170,7 +196,7 @@ export default function AdminEditUser() {
               <div>
                 <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Department <span className="text-[#DC2626]">*</span></label>
                 <div className="relative">
-                  <select className={selectCls} value={formData.department} onChange={handleChange('department')}>
+                  <select disabled={!canReadDepts} className={selectCls} value={formData.department} onChange={handleChange('department')}>
                     <option value="">Select Department</option>
                     {departments.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
                   </select>
@@ -222,7 +248,7 @@ export default function AdminEditUser() {
               <div>
                 <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">System Role <span className="text-[#DC2626]">*</span></label>
                 <div className="relative">
-                  <select className={selectCls} value={formData.role} onChange={handleChange('role')}>
+                  <select disabled={!canReadRoles} className={selectCls} value={formData.role} onChange={handleChange('role')}>
                     <option value="">Select Role</option>
                     {roles.map(r => <option key={r._id} value={r._id}>{r.name}</option>)}
                   </select>

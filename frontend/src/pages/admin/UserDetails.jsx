@@ -142,14 +142,22 @@ export default function AdminUserDetails() {
     setLoading(true);
     setError('');
     try {
-      const [uRes, lRes, pRes] = await Promise.all([
+      const canReadLogs = hasPermission('Audit Logs', 'read');
+      const promises = [
         adminAPI.getUser(id),
-        adminAPI.getAuditLogs({ userId: id, limit: 20 }),
         adminAPI.getUserProjects(id),
-      ]);
+      ];
+      const [uRes, pRes] = await Promise.all(promises);
       setUser(uRes.data.data);
-      setLogs(lRes.data.data || []);
       setProjects(pRes.data.data || []);
+
+      if (canReadLogs) {
+        adminAPI.getAuditLogs({ userId: id, limit: 20 })
+          .then(r => setLogs(r.data.data || []))
+          .catch(() => setLogs([]));
+      } else {
+        setLogs([]);
+      }
 
       // Non-blocking HR data
       hrAPI.getEmployeeLeaves(id)
@@ -160,7 +168,7 @@ export default function AdminUserDetails() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, hasPermission]);
 
   useEffect(() => { fetchUser(); }, [fetchUser]);
 
@@ -243,7 +251,7 @@ export default function AdminUserDetails() {
     { id: 'overview', label: 'Overview',         icon: 'person' },
     { id: 'work',     label: 'Work & Projects',  icon: 'work' },
     { id: 'hr',       label: 'HR Details',       icon: 'badge' },
-    { id: 'activity', label: 'Activity',         icon: 'history', count: logs.length },
+    ...(hasPermission('Audit Logs', 'read') ? [{ id: 'activity', label: 'Activity',         icon: 'history', count: logs.length }] : []),
   ];
 
   // ── Render ──────────────────────────────────────────────────────────────────

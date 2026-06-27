@@ -377,8 +377,6 @@ export default function HRDashboard() {
               </div>
             </div>
 
-<<<<<<< HEAD
-=======
             {/* PENDING LEAVES */}
             <div className="bg-white border border-[#E2E8F0] rounded-lg shadow-sm">
               <div className="px-5 py-4 border-b border-[#E2E8F0] flex justify-between items-center">
@@ -460,7 +458,7 @@ export default function HRDashboard() {
               </div>
             </div>
 
->>>>>>> f28aee497c9e806edad863367e6d187c2031d8a0
+
           </div>
 
           {/* RIGHT: CRITICAL ACTIONS & PENDING ITEMS */}

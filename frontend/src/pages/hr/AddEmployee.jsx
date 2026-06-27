@@ -128,7 +128,7 @@ export default function HRAddEmployee() {
                 <div>
                   <label className="block text-[13px] font-medium text-[#0F172A] mb-1.5">Requested System Role <span className="text-[#DC2626]">*</span></label>
                   <div className="relative">
-                    <select className="w-full border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-[14px] bg-white focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-colors appearance-none cursor-pointer">
+                    <select defaultValue="employee" className="w-full border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-[14px] bg-white focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-colors appearance-none cursor-pointer">
                       <option value="employee">Employee</option>
                       <option value="intern">Intern</option>
                     </select>

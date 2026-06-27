@@ -43,7 +43,7 @@ export default function RestrictedPage({ resource, action }) {
             <span className="material-symbols-outlined text-[#D97706] text-[18px] shrink-0 mt-0.5">info</span>
             <p className="text-[12px] text-[#92400E] text-left leading-relaxed">
               Contact your system administrator to grant access via the <strong>Access Matrix</strong>.
-              Required permission: <code className="font-mono bg-[#FEF3C7] px-1 rounded">{resource?.toLowerCase().replace(/\s+/g, '-')}.{action}</code>
+              Required permission: <code className="font-mono bg-[#FEF3C7] px-1 rounded">{resource?.toLowerCase().replace(/\s+/g, '_')}.{action}</code>
             </p>
           </div>
         </div>

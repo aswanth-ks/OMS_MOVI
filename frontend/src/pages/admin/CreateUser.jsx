@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import PageWrapper from '../../components/PageWrapper';
 import AccessDenied from '../../components/shared/AccessDenied';
 import { adminAPI } from '../../utils/api';
@@ -75,7 +76,14 @@ export default function AdminCreateUser() {
 
   useEffect(() => {
     adminAPI.getRoles()
-      .then(r => setRoles(r.data.data || []))
+      .then(r => {
+        const fetchedRoles = r.data.data || [];
+        setRoles(fetchedRoles);
+        // Set default role to the first role if not already selected
+        if (fetchedRoles.length > 0 && !formData.role) {
+          setFormData(prev => ({ ...prev, role: fetchedRoles[0]._id }));
+        }
+      })
       .catch(() => setRoles([]))
       .finally(() => setRolesLoading(false));
 
@@ -99,7 +107,7 @@ export default function AdminCreateUser() {
   const validateForm = () => {
     if (!formData.name.trim())  { setSubmitError('Full name is required.'); return false; }
     if (!formData.email.trim()) { setSubmitError('Email address is required.'); return false; }
-    if (!formData.role)         { setSubmitError('System role is required.'); return false; }
+    if (roles.length > 0 && !formData.role) { setSubmitError('System role is required.'); return false; }
     if (!formData.department)   { setSubmitError('Department is required.'); return false; }
     return true;
   };

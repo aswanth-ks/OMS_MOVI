@@ -88,14 +88,28 @@ export const updateChecklist = async (req, res, next) => {
       user.onboardingComplete = true;
       
       // Notify user
-      await sendNotification({
-        recipient: user._id,
-        type: 'system_alert',
-        title: 'Onboarding Complete',
-        message: 'Your onboarding is complete! Welcome to Movi Cloud Labs.',
-        link: '/profile',
-        sender: req.user._id,
-      });
+      // Notify user of onboarding completion
+        await sendNotification({
+          recipient: user._id,
+          type: 'system_alert',
+          title: 'Onboarding Complete',
+          message: 'Your onboarding is complete! Welcome to Movi Cloud Labs.',
+          link: '/profile',
+          sender: req.user._id,
+        });
+
+        // Create an approval for the PMO Lead
+        if (user.pmoLead) {
+          const { createApproval } = await import('../../utils/createApproval.js');
+          await createApproval({
+            type: 'Onboarding',
+            title: 'Team Member Ready',
+            message: `${user.name} has completed onboarding and is ready for tasks.`,
+            link: '/pmo/team',
+            recipientId: user.pmoLead._id,
+            createdById: req.user._id,
+          });
+        }
 
       // Notify PMO Lead if they have one
       if (user.pmoLead) {

@@ -73,8 +73,14 @@ export const createUser = async (req, res, next) => {
   try {
     const { name, email, role, department, designation, employmentType, password, skills } = req.body;
 
+    let roleId = role;
+    if (!roleId) {
+      const defaultRole = await Role.findOne({ slug: 'employee' });
+      if (defaultRole) roleId = defaultRole._id;
+    }
+
     // Validate required fields
-    if (!name || !email || !role) {
+    if (!name || !email || !roleId) {
       return sendError(res, 'Name, email, and role are required', 400);
     }
 
@@ -85,7 +91,7 @@ export const createUser = async (req, res, next) => {
     }
 
     // Check role exists
-    const roleDoc = await Role.findById(role);
+    const roleDoc = await Role.findById(roleId);
     if (!roleDoc) {
       return sendError(res, 'Invalid role ID', 400);
     }
@@ -104,7 +110,7 @@ export const createUser = async (req, res, next) => {
       name,
       email: email.toLowerCase(),
       password: userPassword,
-      role,
+      role: roleId,
       department,
       designation,
       employmentType: empType,
