@@ -58,6 +58,11 @@ export function ProtectedRoute({ children, allowedRoles, permission }) {
 
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
 
+  // Force password change before allowing any other page
+  if (user.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
+  }
+
   const userSlug = resolveSlug(user);
 
   // Super-admin bypasses everything

@@ -1,270 +1,119 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
-import { 
-  Users, Search, Filter, Grid, List as ListIcon, 
-  Mail, CalendarDays, X, ChevronRight, Briefcase
-} from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Search, Mail, Briefcase, Users } from 'lucide-react';
+import { employeeAPI } from '../../utils/api';
+import toast from 'react-hot-toast';
 
-// --- MOCK DATA ---
-const mockProjects = [
-  { _id: 'proj001', name: 'OWMS Internal Platform v2' },
-  { _id: 'proj002', name: 'Data Pipeline Automation' },
-];
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—';
 
-const mockTeam = [
-  {
-    _id: "tm001",
-    name: "Sarah Connor",
-    avatar: "SC",
-    role: "Admin",
-    designation: "Product Manager",
-    department: "Product",
-    email: "sarah.connor@movicloudlabs.com",
-    sharedProjects: ['OWMS Internal Platform v2'],
-    color: "bg-blue-600",
-    joinDate: "2022-01-15T00:00:00Z"
-  },
-  {
-    _id: "tm002",
-    name: "John Doe",
-    avatar: "JD",
-    role: "employee",
-    designation: "Developer",
-    department: "Engineering",
-    email: "john.doe@movicloudlabs.com",
-    sharedProjects: ['Data Pipeline Automation'],
-    color: "bg-purple-600",
-    joinDate: "2023-05-10T00:00:00Z"
-  },
-  {
-    _id: "tm003",
-    name: "Aswanth K",
-    avatar: "AK",
-    role: "pmo",
-    designation: "PMO Lead",
-    department: "Management",
-    email: "aswanth.k@movicloudlabs.com",
-    sharedProjects: ['OWMS Internal Platform v2', 'Data Pipeline Automation'],
-    color: "bg-emerald-600",
-    joinDate: "2021-11-20T00:00:00Z"
-  },
-  {
-    _id: "tm004",
-    name: "Rahul Mehta",
-    avatar: "RM",
-    role: "intern",
-    designation: "Intern",
-    department: "Engineering",
-    email: "rahul.mehta@intern.movicloudlabs.com",
-    sharedProjects: ['OWMS Internal Platform v2'],
-    color: "bg-amber-600",
-    joinDate: "2024-09-01T00:00:00Z"
-  },
-  {
-    _id: "tm005",
-    name: "Neha Sharma",
-    avatar: "NS",
-    role: "intern",
-    designation: "Intern",
-    department: "Design",
-    email: "neha.sharma@intern.movicloudlabs.com",
-    sharedProjects: ['Data Pipeline Automation'],
-    color: "bg-pink-600",
-    joinDate: "2024-08-15T00:00:00Z"
-  },
-  {
-    _id: "tm006",
-    name: "Sarah Johnson",
-    avatar: "SJ",
-    role: "hr",
-    designation: "HR Manager",
-    department: "Human Resources",
-    email: "sarah.johnson@movicloudlabs.com",
-    sharedProjects: ['OWMS Internal Platform v2'],
-    color: "bg-rose-600",
-    joinDate: "2020-03-10T00:00:00Z"
-  }
-];
-
-// Removing ProfileModal as we now use TeamDetails page
+const ROLE_COLORS = {
+  'pmo-lead':   'bg-purple-600',
+  'hr-manager': 'bg-rose-500',
+  'employee':   'bg-blue-600',
+  'intern':     'bg-amber-500',
+};
+const roleColor = (slug) => ROLE_COLORS[slug] || 'bg-slate-500';
 
 export default function EmployeeTeam() {
-  const navigate = useNavigate();
-  const [view, setView] = useState('grid');
-  const [search, setSearch] = useState('');
-  const [projectFilter, setProjectFilter] = useState('All Projects');
+  const [team,    setTeam]    = useState([]);
+  const [search,  setSearch]  = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const filteredTeam = mockTeam.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(search.toLowerCase()) || 
-                          member.email.toLowerCase().includes(search.toLowerCase());
-    const matchesProject = projectFilter === 'All Projects' || member.sharedProjects.includes(projectFilter);
-    return matchesSearch && matchesProject;
-  });
+  useEffect(() => {
+    employeeAPI.getTeam()
+      .then(r => setTeam(r.data?.data || []))
+      .catch(() => toast.error('Failed to load team'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = team.filter(m =>
+    !search ||
+    m.name?.toLowerCase().includes(search.toLowerCase()) ||
+    m.designation?.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <PageWrapper>
-      <div className="w-full flex flex-col gap-6 max-w-[1200px] mx-auto pb-8 font-sans px-4 sm:px-6 mt-6">
-        
-        {/* HEADER */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <div className="w-full max-w-[1200px] mx-auto flex flex-col gap-6 px-6 mt-6 pb-10 font-sans">
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-[#0F172A]">My Team</h1>
-            <p className="text-sm text-[#64748B] mt-1">{mockTeam.length} colleagues across {mockProjects.length} projects</p>
+            <h1 className="text-2xl font-bold text-[#0F172A] flex items-center gap-2">
+              <Users size={22} className="text-[#2563EB]" /> My Team
+            </h1>
+            <p className="text-sm text-[#64748B] mt-1">
+              {loading ? 'Loading…' : `${team.length} colleague${team.length !== 1 ? 's' : ''} across your projects`}
+            </p>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <select 
-              value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
-              className="w-full sm:w-auto text-sm border border-[#E2E8F0] rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-[#2563EB] font-medium text-[#0F172A]"
-            >
-              <option value="All Projects">All Projects</option>
-              {mockProjects.map(p => (
-                <option key={p._id} value={p.name}>{p.name}</option>
-              ))}
-            </select>
-            <div className="flex bg-[#F1F5F9] p-1 rounded-lg border border-[#E2E8F0] shrink-0">
-              <button 
-                onClick={() => setView('grid')}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'grid' ? 'bg-white text-[#0F172A] shadow-sm' : 'text-[#64748B] hover:text-[#0F172A]'}`}
-              >
-                <Grid size={16} />
-              </button>
-              <button 
-                onClick={() => setView('list')}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === 'list' ? 'bg-white text-[#0F172A] shadow-sm' : 'text-[#64748B] hover:text-[#0F172A]'}`}
-              >
-                <ListIcon size={16} />
-              </button>
-            </div>
+
+          <div className="relative max-w-xs w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={16} />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search teammates…"
+              className="w-full pl-9 pr-4 py-2.5 border border-[#E2E8F0] rounded-xl text-sm focus:outline-none focus:border-[#2563EB]" />
           </div>
         </div>
 
-        {/* SEARCH BAR */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search teammates by name or email..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-[#E2E8F0] rounded-xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-all bg-white shadow-sm"
-          />
-        </div>
-
-        {/* CONTENT */}
-        {view === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredTeam.map(member => (
-              <div key={member._id} className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-5 hover:shadow-md transition-shadow flex flex-col h-full">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className={`w-12 h-12 rounded-xl ${member.color} text-white flex items-center justify-center text-lg font-bold shrink-0 shadow-sm`}>
-                    {member.avatar}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-[#0F172A]">{member.name}</h3>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                      {member.role === 'intern' ? (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-700">Intern</span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-slate-100 border border-[#E2E8F0] text-[#64748B]">{member.designation}</span>
-                      )}
-                      <span className="text-[10px] text-[#64748B]">{member.department}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1">
-                  <p className="text-xs font-semibold tracking-widest text-[#94A3B8] uppercase mb-2">Shared Projects</p>
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {member.sharedProjects.slice(0, 2).map((p, idx) => (
-                      <span key={idx} className="text-[11px] font-semibold bg-[#F1F5F9] text-[#0F172A] px-2 py-1 rounded truncate max-w-full">
-                        {p}
-                      </span>
-                    ))}
-                    {member.sharedProjects.length > 2 && (
-                      <span className="text-[11px] font-bold bg-[#E2E8F0] text-[#64748B] px-2 py-1 rounded">
-                        +{member.sharedProjects.length - 2} more
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 text-sm text-[#64748B] truncate mb-4">
-                  <Mail size={14} className="shrink-0" />
-                  <span className="truncate">{member.email}</span>
-                </div>
-
-                <button 
-                  onClick={() => navigate(`/employee/team/${member._id}`)}
-                  className="w-full py-2 bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A] font-bold text-sm rounded-lg hover:bg-[#E2E8F0] transition-colors"
-                >
-                  View Profile
-                </button>
-              </div>
-            ))}
+        {loading ? (
+          <div className="flex justify-center py-24">
+            <span className="material-symbols-outlined text-[32px] text-[#2563EB] animate-spin">sync</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 text-[#64748B]">
+            {search ? 'No teammates match your search.' : 'No teammates yet — your PMO lead will add team members to your project.'}
           </div>
         ) : (
-          <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[800px]">
-                <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                  <tr>
-                    <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Teammate</th>
-                    <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Designation & Dept</th>
-                    <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Shared Projects</th>
-                    <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Email</th>
-                    <th className="px-5 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTeam.map(member => (
-                    <tr key={member._id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full ${member.color} text-white flex items-center justify-center text-xs font-bold shrink-0`}>
-                            {member.avatar}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-[#0F172A]">{member.name}</p>
-                            {member.role === 'intern' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-amber-50 border border-amber-200 text-amber-700 mt-0.5 inline-block">Intern</span>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3">
-                        <p className="text-sm font-medium text-[#0F172A]">{member.designation}</p>
-                        <p className="text-xs text-[#64748B]">{member.department}</p>
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-col gap-1">
-                          {member.sharedProjects.map((p, idx) => (
-                            <span key={idx} className="text-xs text-[#0F172A] line-clamp-1">{p}</span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2 text-sm text-[#64748B]">
-                          <Mail size={14} /> {member.email}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <button 
-                          onClick={() => navigate(`/employee/team/${member._id}`)}
-                          className="text-[#2563EB] hover:bg-[#EFF6FF] px-3 py-1.5 rounded-lg text-sm font-bold transition-colors"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map(member => {
+              const initials = (member.name || '?').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
+              const color    = roleColor(member.role?.slug || member.roleSlug);
+              const projects = member.sharedProjects || [];
+              return (
+                <div key={member._id} className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm hover:shadow-md hover:border-[#CBD5E1] transition-all">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className={`w-12 h-12 rounded-full ${color} text-white flex items-center justify-center text-sm font-bold shrink-0`}>
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-[#0F172A] truncate">{member.name}</h3>
+                      <p className="text-xs text-[#64748B] truncate">{member.designation || member.roleInProject || 'Team Member'}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-[#64748B]">
+                    {member.email && (
+                      <div className="flex items-center gap-2 truncate">
+                        <Mail size={12} className="shrink-0" />
+                        <span className="truncate">{member.email}</span>
+                      </div>
+                    )}
+                    {member.roleInProject && (
+                      <div className="flex items-center gap-2">
+                        <Briefcase size={12} className="shrink-0" />
+                        <span>{member.roleInProject}</span>
+                      </div>
+                    )}
+                    {member.joinDate && (
+                      <p className="text-[11px] text-[#94A3B8]">Joined {fmtDate(member.joinDate)}</p>
+                    )}
+                  </div>
+
+                  {projects.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-[#F1F5F9] flex flex-wrap gap-1">
+                      {projects.map((p, i) => (
+                        <span key={i} className="text-[10px] font-bold bg-[#EFF6FF] text-[#2563EB] px-2 py-0.5 rounded truncate max-w-[160px]">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
-
       </div>
-
     </PageWrapper>
   );
 }

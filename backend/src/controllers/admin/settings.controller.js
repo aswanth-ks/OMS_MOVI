@@ -1,7 +1,7 @@
-import nodemailer from 'nodemailer';
 import Settings  from '../../models/Settings.js';
 import AuditLog  from '../../models/AuditLog.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
+import { sendTestEmail, invalidateMailCache } from '../../utils/sendEmail.js';
 
 // ─── GET /api/admin/settings ──────────────────────────────────────────────────
 export const getSettings = async (req, res, next) => {
@@ -39,7 +39,7 @@ export const updateSettings = async (req, res, next) => {
 
     // Build flat dot-path update object per section
     const updateObj = {};
-    const sections  = ['general', 'security', 'notifications', 'branding', 'system'];
+    const sections  = ['general', 'security', 'notifications', 'branding', 'system', 'hr'];
     for (const section of sections) {
       if (incoming[section]) {
         for (const [key, value] of Object.entries(incoming[section])) {
@@ -58,6 +58,9 @@ export const updateSettings = async (req, res, next) => {
       { $set: updateObj },
       { new: true, upsert: true, runValidators: true }
     );
+
+    // Drop the cached mail config so new SMTP / sender identities take effect now
+    if (incoming.notifications) invalidateMailCache();
 
     await AuditLog.create({
       user:     req.user._id,
@@ -103,44 +106,21 @@ export const resetSettings = async (req, res, next) => {
 // ─── POST /api/admin/settings/test-email ─────────────────────────────────────
 export const testEmail = async (req, res) => {
   try {
-    // Need smtpPass — explicitly select it
-    const settings = await Settings.findOne({ key: 'global' }).select('+notifications.smtpPass');
+    // Send a fresh copy reflecting any unsaved-then-saved identity changes
+    invalidateMailCache();
+    const identity = ['onboarding', 'alerts', 'support'].includes(req.body?.identity)
+      ? req.body.identity
+      : 'support';
 
-    if (!settings?.notifications?.smtpHost)
-      return sendError(res, 'SMTP host is not configured', 400);
-
-    const { smtpHost, smtpPort, smtpUser, smtpPass, smtpEncryption, fromName, fromEmail } =
-      settings.notifications;
-
-    const transporter = nodemailer.createTransport({
-      host:   smtpHost,
-      port:   smtpPort,
-      secure: smtpEncryption === 'SSL',
-      auth:   smtpUser ? { user: smtpUser, pass: smtpPass } : undefined,
-    });
-
-    await transporter.sendMail({
-      from:    `"${fromName}" <${fromEmail}>`,
-      to:      req.user.email,
-      subject: 'OWMS — Test Email',
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:auto">
-          <h2 style="color:#2563EB">OWMS Test Email</h2>
-          <p>Your SMTP configuration is working correctly.</p>
-          <p><strong>Sent to:</strong> ${req.user.email}</p>
-          <p><strong>Time:</strong> ${new Date().toISOString()}</p>
-          <hr/>
-          <p style="font-size:12px;color:#64748B">Movi Cloud Labs — OWMS Notification System</p>
-        </div>
-      `,
-    });
+    // Uses DB SMTP when configured, otherwise the EMAIL_* environment fallback.
+    await sendTestEmail({ to: req.user.email, identity });
 
     await AuditLog.create({
       user:     req.user._id,
       userName: req.user.name,
       action:   'Test',
       module:   'Settings',
-      details:  `Test email sent to ${req.user.email}`,
+      details:  `Test email (${identity}) sent to ${req.user.email}`,
       result:   'SUCCESS',
     });
 

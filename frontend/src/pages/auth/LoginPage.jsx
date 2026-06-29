@@ -15,11 +15,11 @@ const ROLE_HOME = {
 
 // One demo account per dashboard
 const ACCOUNTS = [
-  { label: 'Admin',    name: 'Super Admin',   email: 'admin@owms.com',        pass: 'Admin@123', id: 'EMP-2025-001', desc: 'Admin Dashboard',    color: 'bg-slate-100 text-slate-700 border-slate-200',    active: 'border-slate-400 bg-slate-50'   },
-  { label: 'HR',       name: 'Sarah Connor',  email: 'sarah.hr@owms.com',     pass: 'HR@123456', id: 'EMP-2025-002', desc: 'HR Dashboard',       color: 'bg-purple-100 text-purple-700 border-purple-200', active: 'border-purple-400 bg-purple-50' },
-  { label: 'PMO',      name: 'Michael Scott', email: 'pmo@owms.com',          pass: 'PMO@12345', id: 'EMP-2025-003', desc: 'PMO Dashboard',      color: 'bg-cyan-100 text-cyan-700 border-cyan-200',       active: 'border-cyan-400 bg-cyan-50'     },
-  { label: 'Employee', name: 'Alex Johnson',  email: 'alex.emp@owms.com',     pass: 'Emp@12345', id: 'EMP-2025-004', desc: 'Employee Dashboard', color: 'bg-blue-100 text-blue-700 border-blue-200',       active: 'border-blue-400 bg-blue-50'     },
-  { label: 'Intern',   name: 'Rahul Patel',   email: 'rahul.intern@owms.com', pass: 'Int@12345', id: 'INT-2025-001', desc: 'Intern Dashboard',   color: 'bg-emerald-100 text-emerald-700 border-emerald-200', active: 'border-emerald-400 bg-emerald-50' },
+  { label: 'Admin',    name: 'Super Admin',    email: 'admin@owms.com', pass: 'Admin@123', id: 'EMP-2025-001', desc: 'Admin Dashboard',    color: 'bg-slate-100 text-slate-700 border-slate-200',       active: 'border-slate-400 bg-slate-50'      },
+  { label: 'HR',       name: 'Sarah Johnson',  email: 'hr@owms.com',    pass: 'HR@123456', id: 'EMP-2025-002', desc: 'HR Dashboard',       color: 'bg-purple-100 text-purple-700 border-purple-200',    active: 'border-purple-400 bg-purple-50'    },
+  { label: 'PMO',      name: 'Alex Wong',      email: 'pmo@owms.com',   pass: 'PMO@12345', id: 'EMP-2025-003', desc: 'PMO Dashboard',      color: 'bg-cyan-100 text-cyan-700 border-cyan-200',          active: 'border-cyan-400 bg-cyan-50'        },
+  { label: 'Employee', name: 'John Employee',  email: 'john@owms.com',  pass: 'Emp@12345', id: 'EMP-2025-004', desc: 'Employee Dashboard', color: 'bg-blue-100 text-blue-700 border-blue-200',          active: 'border-blue-400 bg-blue-50'        },
+  { label: 'Intern',   name: 'Rahul Intern',   email: 'rahul@owms.com', pass: 'Int@12345', id: 'INT-2025-001', desc: 'Intern Dashboard',   color: 'bg-emerald-100 text-emerald-700 border-emerald-200', active: 'border-emerald-400 bg-emerald-50'  },
 ];
 
 export default function LoginPage() {

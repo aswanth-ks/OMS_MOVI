@@ -10,6 +10,7 @@ import mongoose from 'mongoose';
 
 // Route imports
 import authRoutes from './routes/auth.routes.js';
+import meRoutes from './routes/me.routes.js';
 import adminUserRoutes from './routes/admin/users.routes.js';
 import adminDeptRoutes from './routes/admin/departments.routes.js';
 import adminRoleRoutes from './routes/admin/roles.routes.js';
@@ -27,6 +28,8 @@ import hrAttendanceRoutes from './routes/hr/attendance.routes.js';
 import hrLeavesRoutes from './routes/hr/leaves.routes.js';
 import hrInternsRoutes from './routes/hr/interns.routes.js';
 import hrReportsRoutes from './routes/hr/reports.routes.js';
+import hrTasksRoutes from './routes/hr/tasks.routes.js';
+import hrProjectsRoutes from './routes/hr/projects.routes.js';
 
 import pmoProjectsRoutes from './routes/pmo/projects.routes.js';
 import pmoTasksRoutes from './routes/pmo/tasks.routes.js';
@@ -39,8 +42,10 @@ import pmoDashboardRoutes from './routes/pmo/dashboard.routes.js';
 import empProfileRoutes from './routes/employee/profile.routes.js';
 import empTasksRoutes from './routes/employee/tasks.routes.js';
 import empProjectsRoutes from './routes/employee/projects.routes.js';
+import empTeamRoutes from './routes/employee/team.routes.js';
 import empAttendanceRoutes from './routes/employee/attendance.routes.js';
 import empLeaveRoutes from './routes/employee/leave.routes.js';
+import empNotificationsRoutes from './routes/employee/notifications.routes.js';
 
 import internProfileRoutes from './routes/intern/profile.routes.js';
 import internTasksRoutes from './routes/intern/tasks.routes.js';
@@ -158,6 +163,7 @@ app.get('/api/health', (req, res) => {
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api/me', meRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/departments', adminDeptRoutes);
 app.use('/api/admin/roles', adminRoleRoutes);
@@ -175,6 +181,8 @@ app.use('/api/hr/attendance', hrAttendanceRoutes);
 app.use('/api/hr/leaves', hrLeavesRoutes);
 app.use('/api/hr/interns', hrInternsRoutes);
 app.use('/api/hr/reports', hrReportsRoutes);
+app.use('/api/hr/tasks', hrTasksRoutes);
+app.use('/api/hr/projects', hrProjectsRoutes);
 
 // PMO Module
 app.use('/api/pmo/dashboard', pmoDashboardRoutes);
@@ -189,8 +197,10 @@ app.use('/api/pmo/reports', pmoReportsRoutes);
 app.use('/api/employee/profile', empProfileRoutes);
 app.use('/api/employee/tasks', empTasksRoutes);
 app.use('/api/employee/projects', empProjectsRoutes);
+app.use('/api/employee/team', empTeamRoutes);
 app.use('/api/employee/attendance', empAttendanceRoutes);
 app.use('/api/employee/leave', empLeaveRoutes);
+app.use('/api/employee/notifications', empNotificationsRoutes);
 
 // Intern Module
 app.use('/api/intern/profile', internProfileRoutes);

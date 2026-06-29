@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-  SlidersHorizontal, Shield, Bell, Palette, Server,
+  SlidersHorizontal, Shield, Bell, Palette, Server, Users,
   Save, CheckCircle2, AlertTriangle, ChevronLeft,
   Eye, EyeOff, Upload, Mail, Lock, RefreshCw,
   AlertCircle, X,
@@ -409,7 +409,7 @@ function NotificationsTab({ s, upd, err, canEdit, userEmail }) {
         <Seg options={[{value:'none',label:'None'},{value:'TLS',label:'TLS'},{value:'SSL',label:'SSL'}]}
           value={s.smtpEncryption||'TLS'} onChange={v=>upd('smtpEncryption',v)} disabled={!canEdit}/>
       </Row>
-      <Row label="From">
+      <Row label="Default From" helper="Used when a sender identity below is left blank">
         <div className="flex gap-2">
           <Input type="email" value={s.fromEmail||''} onChange={e=>upd('fromEmail',e.target.value)}
             disabled={!canEdit} placeholder="noreply@domain.com" error={err['notifications.fromEmail']} className="flex-1"/>
@@ -431,6 +431,30 @@ function NotificationsTab({ s, upd, err, canEdit, userEmail }) {
           </div>
         )}
       </Row>
+
+      <div className="pt-4 mt-2">
+        <SectionHead title="Sender Identities"
+          desc="One SMTP connection, three senders. Leave a field blank to fall back to the Default From above. On Gmail the From address is forced to the SMTP account, but the display name and Reply-To still apply."/>
+      </div>
+      {[
+        ['onboarding', 'Onboarding',          'Welcome emails for new users'],
+        ['alerts',     'Alerts',              'Project assignments, tasks & system notifications'],
+        ['support',    'Support & Helpline',  'Password reset emails — set Reply-To to a monitored inbox'],
+      ].map(([key, label, helper]) => (
+        <Row key={key} label={label} helper={helper}
+          error={err[`notifications.${key}FromEmail`] || err[`notifications.${key}ReplyTo`]}>
+          <div className="flex flex-col gap-2">
+            <Input value={s[`${key}FromName`]||''} onChange={e=>upd(`${key}FromName`, e.target.value)}
+              disabled={!canEdit} placeholder="Display name (e.g. OWMS Support)"/>
+            <Input type="email" value={s[`${key}FromEmail`]||''} onChange={e=>upd(`${key}FromEmail`, e.target.value)}
+              disabled={!canEdit} placeholder="From address — blank uses Default From"
+              error={err[`notifications.${key}FromEmail`]}/>
+            <Input type="email" value={s[`${key}ReplyTo`]||''} onChange={e=>upd(`${key}ReplyTo`, e.target.value)}
+              disabled={!canEdit} placeholder="Reply-To — blank means no reply address"
+              error={err[`notifications.${key}ReplyTo`]}/>
+          </div>
+        </Row>
+      ))}
 
       <div className="pt-4 mt-2">
         <SectionHead title="Event Notifications" desc="Which events trigger admin email alerts"/>
@@ -629,6 +653,46 @@ function SystemTab({ s, upd, err, canEdit, isSuperAdmin, onDanger, updatedAt }) 
   );
 }
 
+// ─── HR ───────────────────────────────────────────────────────────────────────
+function HRTab({ s, upd, err, canEdit }) {
+  return (
+    <div>
+      <SectionHead title="Onboarding" desc="Controls how HR is auto-assigned when Admin creates a new employee or intern"/>
+      <Row
+        label="HR Onboarding Cap"
+        helper="Max employees one HR can handle for physical onboarding at a time"
+        error={err['hr.onboardingHRCap']}
+      >
+        <div className="flex items-center gap-3">
+          <input
+            type="range" min={1} max={50} step={1}
+            value={s?.onboardingHRCap ?? 10}
+            onChange={e => upd('onboardingHRCap', parseInt(e.target.value))}
+            disabled={!canEdit}
+            className="w-40 accent-[#2563EB] disabled:opacity-40"
+          />
+          <span className="text-[13px] font-semibold text-[#2563EB] w-24">
+            {s?.onboardingHRCap ?? 10} employees
+          </span>
+        </div>
+        <p className="text-[11px] text-[#9CA3AF] mt-1">
+          When all HRs are at capacity, the system still auto-assigns to the least-loaded HR and warns Admin.
+        </p>
+      </Row>
+      <Row
+        label="Assignment Logic"
+        helper="Priority order when auto-assigning an HR"
+      >
+        <ol className="text-[12px] text-[#374151] space-y-1 list-none">
+          <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-[#EFF6FF] text-[#2563EB] text-[10px] font-bold flex items-center justify-center shrink-0">1</span> Same department HR under cap</li>
+          <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-[#EFF6FF] text-[#2563EB] text-[10px] font-bold flex items-center justify-center shrink-0">2</span> Any HR under cap (least-loaded first)</li>
+          <li className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[10px] font-bold flex items-center justify-center shrink-0">3</span> Least-loaded HR (soft cap — Admin warned)</li>
+        </ol>
+      </Row>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -638,6 +702,7 @@ const TABS = [
   { key: 'notifications', label: 'Notifications', Icon: Bell },
   { key: 'branding',      label: 'Branding',      Icon: Palette },
   { key: 'system',        label: 'System',        Icon: Server },
+  { key: 'hr',            label: 'HR',            Icon: Users },
 ];
 
 export default function Settings() {
@@ -685,11 +750,17 @@ export default function Settings() {
   // ── Validate ──────────────────────────────────────────────────────────────
   const validate = () => {
     const e = {};
-    const { security: s, general: g, system: sys, notifications: n } = settings;
+    const { security: s, general: g, system: sys, notifications: n, hr: h } = settings;
     if ((s.minPasswordLength??8)<6||(s.minPasswordLength??8)>32)    e['security.minPasswordLength']='Must be 6–32';
     if ((g.itemsPerPage??25)<10||(g.itemsPerPage??25)>100)           e['general.itemsPerPage']='Must be 10–100';
     if ((sys.apiRateLimit??100)<10||(sys.apiRateLimit??100)>1000)    e['system.apiRateLimit']='Must be 10–1000';
-    if (n.fromEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(n.fromEmail)) e['notifications.fromEmail']='Invalid email';
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (n.fromEmail&&!emailRe.test(n.fromEmail)) e['notifications.fromEmail']='Invalid email';
+    ['onboarding','alerts','support'].forEach(k => {
+      if (n[`${k}FromEmail`]&&!emailRe.test(n[`${k}FromEmail`])) e[`notifications.${k}FromEmail`]='Invalid email';
+      if (n[`${k}ReplyTo`]  &&!emailRe.test(n[`${k}ReplyTo`]))   e[`notifications.${k}ReplyTo`]='Invalid email';
+    });
+    if ((h?.onboardingHRCap??10)<1||(h?.onboardingHRCap??10)>50)     e['hr.onboardingHRCap']='Must be 1–50';
     setValErrs(e);
     return Object.keys(e).length === 0;
   };
@@ -821,6 +892,7 @@ export default function Settings() {
               {tab === 'notifications' && <NotificationsTab s={settings.notifications} upd={upd('notifications')} err={valErrs} canEdit={canEdit} userEmail={user?.email||''}/>}
               {tab === 'branding'      && <BrandingTab      s={settings.branding}      upd={upd('branding')}      canEdit={canEdit}/>}
               {tab === 'system'        && <SystemTab        s={settings.system}        upd={upd('system')}        err={valErrs} canEdit={canEdit} isSuperAdmin={isSuperAdmin} onDanger={setDanger} updatedAt={settings.updatedAt}/>}
+              {tab === 'hr'           && <HRTab            s={settings.hr}            upd={upd('hr')}            err={valErrs} canEdit={canEdit}/>}
             </motion.div>
           </AnimatePresence>
         </div>

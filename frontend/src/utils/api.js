@@ -57,6 +57,8 @@ export const authAPI = {
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
   refresh: (refreshToken) => api.post('/auth/refresh', { refreshToken }),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (data) => api.post('/auth/reset-password', data),
 };
 
 // ─── ADMIN API ────────────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ export const adminAPI = {
   saveSettings: (data) => api.put('/admin/settings', data),
   updateSettings: (data) => api.put('/admin/settings', data),
   resetSettings: () => api.post('/admin/settings/reset'),
-  testEmail: () => api.post('/admin/settings/test-email'),
+  testEmail: (identity) => api.post('/admin/settings/test-email', identity ? { identity } : {}),
   uploadLogo: (formData) =>
     api.post('/admin/settings/upload-logo', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -134,6 +136,8 @@ export const hrAPI = {
   getPendingOnboarding: () => api.get('/hr/onboarding/pending'),
   getCompletedOnboarding: () => api.get('/hr/onboarding/completed'),
   updateOnboardingChecklist: (id, data) => api.patch(`/hr/onboarding/${id}/checklist`, data),
+  getHRList: () => api.get('/hr/onboarding/hr-list'),
+  reassignHR: (id, hrManagerId) => api.patch(`/hr/onboarding/${id}/reassign`, { hrManagerId }),
 
   getAttendance: (params) => api.get('/hr/attendance', { params }),
   markAttendance: (data) => api.post('/hr/attendance/mark', data),
@@ -144,14 +148,38 @@ export const hrAPI = {
   reviewLeave: (id, data) => api.patch(`/hr/leaves/${id}/review`, data),
   allocateLeaveBalance: (data) => api.post('/hr/leaves/balance', data),
 
+  getMyLeaveBalance: () => api.get('/hr/leaves/my/balance'),
+  getMyLeaves: () => api.get('/hr/leaves/my'),
+  applyMyLeave: (data) => api.post('/hr/leaves/my/apply', data),
+
   getInterns: (params) => api.get('/hr/interns', { params }),
   getIntern: (id) => api.get(`/hr/interns/${id}`),
+  getInternLearning: (id) => api.get(`/hr/interns/${id}/learning`),
+  assignInternLearning: (id, data) => api.post(`/hr/interns/${id}/learning`, data),
+  deleteInternLearning: (id, resourceId) => api.delete(`/hr/interns/${id}/learning/${resourceId}`),
   addInternPerformance: (id, data) => api.post(`/hr/interns/${id}/performance`, data),
   assignInternMentor: (id, data) => api.patch(`/hr/interns/${id}/assign-mentor`, data),
 
   getHeadcountReport: () => api.get('/hr/reports/headcount'),
   getAttendanceSummary: (params) => api.get('/hr/reports/attendance-summary', { params }),
   getLeaveSummary: (params) => api.get('/hr/reports/leave-summary', { params }),
+
+  addEmployeePerformance: (id, data) => api.post(`/hr/employees/${id}/performance`, data),
+
+  getMyProjects: () => api.get('/hr/projects'),
+  getMyProject:  (id) => api.get(`/hr/projects/${id}`),
+
+  getMyTasks: () => api.get('/hr/tasks/my'),
+  getMyTask: (id) => api.get(`/hr/tasks/my/${id}`),
+  getInternTasks: () => api.get('/hr/tasks/interns'),
+  getEmployeeTasks: () => api.get('/hr/tasks/employees'),
+  updateMyTaskStatus: (id, data) => api.patch(`/hr/tasks/my/${id}/status`, data),
+  deleteMyLeave: (id) => api.delete(`/hr/leaves/my/${id}`),
+  toggleMySubtask: (taskId, index) => api.patch(`/hr/tasks/my/${taskId}/subtasks/${index}`),
+  uploadMyTaskAttachment: (taskId, formData) =>
+    api.post(`/hr/tasks/my/${taskId}/attachments`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  addMyTaskComment: (id, data) => api.post(`/hr/tasks/my/${id}/comments`, data),
+  assignTask: (data) => api.post('/hr/tasks/assign', data),
 };
 
 // ─── PMO API ──────────────────────────────────────────────────────────────
@@ -174,15 +202,25 @@ export const pmoAPI = {
   updateTaskStatus: (id, data) => api.patch(`/pmo/tasks/${id}/status`, data),
   addTaskComment: (id, data) => api.post(`/pmo/tasks/${id}/comments`, data),
   deleteTask: (id) => api.delete(`/pmo/tasks/${id}`),
+  uploadTaskAttachment: (id, formData) =>
+    api.post(`/pmo/tasks/${id}/attachments`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 
   getTeam: () => api.get('/pmo/team'),
   getAvailableMembers: (params) => api.get('/pmo/team/available', { params }),
+  getEmployee: (id) => api.get(`/pmo/team/${id}`),
 
   getInterns: () => api.get('/pmo/interns'),
+  getIntern: (id) => api.get(`/pmo/interns/${id}`),
+  getInternLearning: (id) => api.get(`/pmo/interns/${id}/learning`),
+  assignInternLearning: (id, data) => api.post(`/pmo/interns/${id}/learning`, data),
+  deleteInternLearning: (id, resourceId) => api.delete(`/pmo/interns/${id}/learning/${resourceId}`),
+  addInternRating: (id, data) => api.post(`/pmo/interns/${id}/performance`, data),
   requestInterns: (data) => api.post('/pmo/interns/request', data),
 
   getPendingLeaves: () => api.get('/pmo/approvals/leaves'),
   getTasksInReview: () => api.get('/pmo/approvals/tasks'),
+  getPendingOnboarding: () => api.get('/pmo/approvals/onboarding'),
+  approveOnboarding: (id) => api.post(`/pmo/approvals/onboarding/${id}/approve`),
 
   getProjectHealth: () => api.get('/pmo/reports/health'),
   getResourceWarnings: () => api.get('/pmo/reports/warnings'),
@@ -192,23 +230,45 @@ export const pmoAPI = {
 
 // ─── EMPLOYEE API ─────────────────────────────────────────────────────────
 export const employeeAPI = {
+  // Profile
   getProfile: () => api.get('/employee/profile'),
   updateProfile: (data) => api.patch('/employee/profile', data),
   changePassword: (data) => api.post('/employee/profile/change-password', data),
 
+  // Tasks
   getTasks: (params) => api.get('/employee/tasks', { params }),
+  getTask: (id) => api.get(`/employee/tasks/${id}`),
   updateTaskStatus: (id, data) => api.patch(`/employee/tasks/${id}/status`, data),
-  addTaskComment: (id, data) => api.post(`/employee/tasks/${id}/comments`, data),
+  addComment: (id, data) => api.post(`/employee/tasks/${id}/comments`, data),
+  uploadAttachment: (id, formData) =>
+    api.post(`/employee/tasks/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  toggleSubtask: (taskId, subtaskId) =>
+    api.patch(`/employee/tasks/${taskId}/subtasks/${subtaskId}`),
 
-  getProjects: (params) => api.get('/employee/projects', { params }),
+  // Projects
+  getProjects: () => api.get('/employee/projects'),
   getProject: (id) => api.get(`/employee/projects/${id}`),
-  getTeam: () => api.get('/employee/projects/team'),
 
+  // Team
+  getTeam: () => api.get('/employee/team'),
+  getTeamMember: (userId) => api.get(`/employee/team/${userId}`),
+
+  // Attendance
   getAttendance: (params) => api.get('/employee/attendance', { params }),
-  
-  getLeaves: () => api.get('/employee/leave'),
+
+  // Leave
   getLeaveBalance: () => api.get('/employee/leave/balance'),
-  applyForLeave: (data) => api.post('/employee/leave', data),
+  getLeaveRequests: (params) => api.get('/employee/leave/requests', { params }),
+  applyLeave: (data) => api.post('/employee/leave/apply', data),
+  cancelLeave: (id) => api.delete(`/employee/leave/${id}`),
+
+  // Notifications
+  getNotifications: () => api.get('/employee/notifications'),
+  markRead: (id) => api.patch(`/employee/notifications/${id}/read`),
+  markAllRead: () => api.patch('/employee/notifications/read-all'),
+  deleteNotification: (id) => api.delete(`/employee/notifications/${id}`),
 };
 
 // ─── INTERN API ───────────────────────────────────────────────────────────
@@ -229,6 +289,19 @@ export const internAPI = {
 
   getLearningResources: () => api.get('/intern/learning'),
   updateLearningStatus: (id, data) => api.patch(`/intern/learning/${id}/status`, data),
+
+  cancelLeave: (id) => api.delete(`/intern/leave/${id}`),
+  getTask: (id) => api.get(`/intern/tasks/${id}`),
+  toggleSubtask: (taskId, subtaskId) => api.patch(`/intern/tasks/${taskId}/subtasks/${subtaskId}`),
+  uploadAttachment: (taskId, formData) =>
+    api.post(`/intern/tasks/${taskId}/attachments`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+};
+
+// ─── ME API (any role — profile self-service) ─────────────────────────────
+export const meAPI = {
+  getProfile:     ()     => api.get('/me/profile'),
+  updateProfile:  (data) => api.patch('/me/profile', data),
+  changePassword: (data) => api.post('/me/change-password', data),
 };
 
 // ─── NOTIFICATION API ─────────────────────────────────────────────────────

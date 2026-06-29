@@ -32,6 +32,61 @@ export const getInterns = async (req, res, next) => {
   }
 };
 
+export const addPerformanceRating = async (req, res, next) => {
+  try {
+    const { week, rating, note } = req.body;
+    if (!week || !rating) return sendError(res, 'Week and rating are required', 400);
+
+    const intern = await User.findOne({ _id: req.params.id, employmentType: 'Intern' });
+    if (!intern) return sendError(res, 'Intern not found', 404);
+
+    const existingIndex = intern.performanceRatings.findIndex(
+      r => r.week === week && r.addedBy?.toString() === req.user._id.toString()
+    );
+    if (existingIndex !== -1) {
+      intern.performanceRatings[existingIndex].rating = rating;
+      intern.performanceRatings[existingIndex].note = note;
+      intern.performanceRatings[existingIndex].source = 'pmo';
+    } else {
+      intern.performanceRatings.push({ week, rating, note, source: 'pmo', addedBy: req.user._id });
+    }
+    await intern.save({ validateBeforeSave: false });
+
+    await sendNotification({
+      recipient: intern._id,
+      type: 'system_alert',
+      title: 'Performance Evaluation Added',
+      message: `Week ${week} evaluation submitted by PMO Lead ${req.user.name}.`,
+      link: '/intern/profile',
+      sender: req.user._id,
+    });
+
+    sendSuccess(res, intern.performanceRatings, 'Performance rating saved');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getInternById = async (req, res, next) => {
+  try {
+    const intern = await User.findOne({
+      _id: req.params.id,
+      employmentType: 'Intern',
+      status: 'Active',
+    })
+      .populate('department', 'name code')
+      .populate('manager', 'name')
+      .populate('hrManager', 'name')
+      .select('-password');
+
+    if (!intern) return sendError(res, 'Intern not found', 404);
+
+    sendSuccess(res, intern);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const requestInterns = async (req, res, next) => {
   try {
     const { projectId, department, duration, skills, note } = req.body;

@@ -1,28 +1,100 @@
 import LeaveRequest from '../../models/LeaveRequest.js';
 import Task from '../../models/Task.js';
 import Project from '../../models/Project.js';
+import User from '../../models/User.js';
+import Role from '../../models/Role.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { sendNotification } from '../../utils/sendNotification.js';
 
 export const getPendingLeaves = async (req, res, next) => {
   try {
-    // PMO Leads don't officially approve leaves (HR does), but they can view pending leaves 
-    // for their team members to assess project impact.
-    const projects = await Project.find({ ...req.projectFilter })
-      .select('team interns');
-
+    // Collect project team members (non-interns)
+    const projects = await Project.find({ ...req.projectFilter }).select('team');
     const memberIds = new Set();
-    projects.forEach(p => {
-      p.team.forEach(t => memberIds.add(t.user.toString()));
-      p.interns.forEach(i => memberIds.add(i.user.toString()));
-    });
+    projects.forEach(p => p.team.forEach(t => memberIds.add(t.user.toString())));
+
+    const employeeIds = await User.find({
+      _id: { $in: Array.from(memberIds) },
+      employmentType: { $ne: 'Intern' },
+    }).select('_id').then(u => u.map(u => u._id));
+
+    // Also include HR managers — their leave requests go to PMO for approval
+    const hrRoles = await Role.find({ slug: { $in: ['hr', 'hr-manager'] } }).select('_id');
+    const hrRoleIds = hrRoles.map(r => r._id);
+    const hrUserIds = await User.find({ role: { $in: hrRoleIds } }).select('_id').then(u => u.map(u => u._id));
+
+    // Merge and deduplicate
+    const allUserIdStrs = new Set([
+      ...employeeIds.map(id => id.toString()),
+      ...hrUserIds.map(id => id.toString()),
+    ]);
+    const allUserIds = Array.from(allUserIdStrs);
 
     const pendingLeaves = await LeaveRequest.find({
-      user: { $in: Array.from(memberIds) },
+      user: { $in: allUserIds },
       status: 'Pending',
-    }).populate('user', 'name employeeId avatar department role');
+    })
+      .populate('user', 'name employeeId avatar department designation role')
+      .populate({ path: 'user', populate: { path: 'role', select: 'name slug' } })
+      .sort({ createdAt: 1 });
 
     sendSuccess(res, pendingLeaves);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPendingOnboarding = async (req, res, next) => {
+  try {
+    // Show recently created users (employees) with incomplete onboarding across PMO's projects
+    const projects = await Project.find({ ...req.projectFilter }).select('team');
+    const memberIds = new Set();
+    projects.forEach(p => p.team.forEach(t => memberIds.add(t.user.toString())));
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const pendingUsers = await User.find({
+      _id: { $in: Array.from(memberIds) },
+      status: 'Active',
+      onboardingComplete: { $ne: true },
+      createdAt: { $gte: thirtyDaysAgo },
+    })
+      .populate('department', 'name')
+      .populate('role', 'name color')
+      .select('name employeeId avatar department role onboardingChecklist createdAt designation employmentType');
+
+    const usersWithProgress = pendingUsers.map(u => {
+      const user = u.toJSON();
+      const checklist = user.onboardingChecklist || {};
+      const items = Object.values(checklist);
+      const completed = items.filter(Boolean).length;
+      user.onboardingProgress = items.length > 0 ? Math.round((completed / items.length) * 100) : 0;
+      return user;
+    });
+
+    sendSuccess(res, usersWithProgress);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const approveOnboarding = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) return sendError(res, 'User not found', 404);
+
+    user.onboardingComplete = true;
+    await user.save({ validateBeforeSave: false });
+
+    await sendNotification({
+      recipient: user._id,
+      type: 'system_alert',
+      title: 'Onboarding Approved',
+      message: `Your onboarding has been approved by PMO Lead ${req.user.name}. Welcome to the team!`,
+      sender: req.user._id,
+    });
+
+    sendSuccess(res, null, 'Onboarding approved successfully');
   } catch (error) {
     next(error);
   }

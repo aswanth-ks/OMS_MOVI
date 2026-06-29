@@ -478,9 +478,10 @@ export default function PMOTaskBoard() {
 
       {/* Task Modal details */}
       {selectedTask && (
-        <TaskDetailModal 
-          task={selectedTask} 
-          onClose={() => setSelectedTask(null)} 
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onDelete={(id) => setTasks(prev => prev.filter(t => (t.raw?._id || t._id) !== id))}
         />
       )}
 

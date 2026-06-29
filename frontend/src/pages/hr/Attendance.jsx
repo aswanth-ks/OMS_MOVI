@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  CalendarDays, CheckCircle2, XCircle, Clock, 
-  Users, Filter, ChevronRight,
-  AlertCircle, ChevronLeft, List, Download
+import {
+  CalendarDays, CheckCircle2, XCircle, Clock,
+  Users, ChevronRight,
+  AlertCircle, ChevronLeft, List, Download,
 } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
 import { hrAPI } from '../../utils/api';
@@ -160,7 +160,7 @@ export default function HRAttendance() {
             </p>
           </div>
           <div className="flex gap-3">
-            <button 
+            <button
               onClick={handleExportCSV}
               className="border border-[#E2E8F0] bg-white hover:bg-[#F8FAFC] text-[#0F172A] px-4 py-2 rounded-md text-[13px] font-medium transition-colors flex items-center gap-2 shadow-sm"
             >
@@ -425,6 +425,7 @@ export default function HRAttendance() {
 
         </div>
       </div>
+
     </PageWrapper>
   );
 }

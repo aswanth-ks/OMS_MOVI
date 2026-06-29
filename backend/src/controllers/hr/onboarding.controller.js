@@ -1,22 +1,99 @@
-import User from '../../models/User.js';
+import User     from '../../models/User.js';
+import Role     from '../../models/Role.js';
+import Settings from '../../models/Settings.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { sendNotification } from '../../utils/sendNotification.js';
 
+// Returns all HR users with their current onboarding load + cap info
+export const getHRList = async (req, res, next) => {
+  try {
+    const settings = await Settings.findOne({ key: 'global' }).select('hr');
+    const cap      = settings?.hr?.onboardingHRCap ?? 10;
+
+    const hrRole = await Role.findOne({ slug: 'hr' }).select('_id');
+    if (!hrRole) return sendSuccess(res, []);
+
+    const hrUsers = await User.find({
+      role:      hrRole._id,
+      status:    'Active',
+      deletedAt: { $exists: false },
+    }).select('_id name employeeId department');
+
+    const withLoad = await Promise.all(
+      hrUsers.map(async (hr) => {
+        const load = await User.countDocuments({
+          hrManager:          hr._id,
+          onboardingComplete: false,
+          deletedAt:          { $exists: false },
+        });
+        return { _id: hr._id, name: hr.name, employeeId: hr.employeeId, load, cap, atCap: load >= cap };
+      })
+    );
+
+    withLoad.sort((a, b) => a.load - b.load);
+    sendSuccess(res, withLoad);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Reassign a user's onboarding HR
+export const reassignHR = async (req, res, next) => {
+  try {
+    const { hrManagerId } = req.body;
+    if (!hrManagerId) return sendError(res, 'hrManagerId is required', 400);
+
+    const employee = await User.findOne({ _id: req.params.id, ...req.scopeFilter });
+    if (!employee) return sendError(res, 'User not in scope', 404);
+
+    const newHR = await User.findById(hrManagerId).select('_id name');
+    if (!newHR) return sendError(res, 'HR user not found', 404);
+
+    const oldHRId = employee.hrManager;
+    employee.hrManager = newHR._id;
+    await employee.save({ validateBeforeSave: false });
+
+    // Notify new HR
+    await sendNotification({
+      recipient: newHR._id,
+      type:      'system_alert',
+      title:     'Onboarding Assignment',
+      message:   `You have been assigned as the onboarding HR for ${employee.name} (${employee.employeeId}).`,
+      link:      '/hr/onboarding',
+      sender:    req.user._id,
+    });
+
+    // Notify old HR
+    if (oldHRId && oldHRId.toString() !== newHR._id.toString()) {
+      await sendNotification({
+        recipient: oldHRId,
+        type:      'system_alert',
+        title:     'Onboarding Reassigned',
+        message:   `${employee.name} (${employee.employeeId}) has been reassigned to ${newHR.name}.`,
+        link:      '/hr/onboarding',
+        sender:    req.user._id,
+      });
+    }
+
+    sendSuccess(res, { hrManager: newHR }, 'HR reassigned successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getPendingOnboarding = async (req, res, next) => {
   try {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    
     const filter = {
       ...req.scopeFilter,
       status: 'Active',
-      onboardingComplete: false,
-      createdAt: { $gte: thirtyDaysAgo }
+      onboardingComplete: { $ne: true },
     };
 
     const pendingUsers = await User.find(filter)
       .populate('department', 'name')
       .populate('role', 'name color')
-      .select('name employeeId avatar department role onboardingChecklist createdAt');
+      .populate('hrManager', 'name employeeId')
+      .select('name employeeId avatar department role hrManager onboardingChecklist createdAt');
 
     // Calculate completion percentage
     const usersWithProgress = pendingUsers.map(u => {
@@ -36,19 +113,17 @@ export const getPendingOnboarding = async (req, res, next) => {
 
 export const getCompletedOnboarding = async (req, res, next) => {
   try {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    
     const filter = {
       ...req.scopeFilter,
       status: 'Active',
       onboardingComplete: true,
-      updatedAt: { $gte: thirtyDaysAgo }
     };
 
     const completedUsers = await User.find(filter)
       .populate('department', 'name')
       .populate('role', 'name color')
-      .select('name employeeId avatar department role updatedAt')
+      .populate('hrManager', 'name')
+      .select('name employeeId avatar department role hrManager updatedAt')
       .sort({ updatedAt: -1 });
 
     sendSuccess(res, completedUsers);

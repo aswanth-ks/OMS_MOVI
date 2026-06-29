@@ -121,18 +121,15 @@ export const addPerformanceRating = async (req, res, next) => {
 
     if (!intern) return sendError(res, 'Intern not found', 404);
 
-    const existingIndex = intern.performanceRatings.findIndex(r => r.week === week);
+    const existingIndex = intern.performanceRatings.findIndex(
+      r => r.week === week && r.addedBy?.toString() === req.user._id.toString()
+    );
     if (existingIndex !== -1) {
       intern.performanceRatings[existingIndex].rating = rating;
       intern.performanceRatings[existingIndex].note = note;
-      intern.performanceRatings[existingIndex].addedBy = req.user._id;
+      intern.performanceRatings[existingIndex].source = 'hr';
     } else {
-      intern.performanceRatings.push({
-        week,
-        rating,
-        note,
-        addedBy: req.user._id,
-      });
+      intern.performanceRatings.push({ week, rating, note, source: 'hr', addedBy: req.user._id });
     }
 
     await intern.save({ validateBeforeSave: false });

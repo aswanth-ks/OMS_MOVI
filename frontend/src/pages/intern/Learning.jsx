@@ -1,247 +1,235 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
-import { Play, FileText, ExternalLink, GraduationCap, CalendarDays, Clock, CheckCircle } from 'lucide-react';
+import {
+  Play, FileText, ExternalLink, GraduationCap,
+  CalendarDays, Clock, CheckCircle,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { internAPI } from '../../utils/api';
+import toast from 'react-hot-toast';
 
-// --- MOCK DATA ---
-// BACKEND: GET /api/intern/learning/resources
-const mockResources = [
-  { 
-    _id: "res001", title: "React 18 Fundamentals", type: "Course", url: "https://reactjs.org/docs",
-    assignedBy: { name: "Aswanth K", role: "PMO Lead" }, dueDate: "2024-10-20T23:59:59Z",
-    estimatedMinutes: 120, status: "In Progress", completedAt: null 
-  },
-  { 
-    _id: "res002", title: "Tailwind CSS Complete Guide", type: "Document", url: "https://tailwindcss.com/docs",
-    assignedBy: { name: "Sarah Johnson", role: "HR Manager" }, dueDate: "2024-10-15T23:59:59Z",
-    estimatedMinutes: 60, status: "Completed", completedAt: "2024-10-10T14:30:00Z" 
-  },
-  { 
-    _id: "res003", title: "Git & GitHub for Teams", type: "Video", url: "#",
-    assignedBy: { name: "Aswanth K", role: "PMO Lead" }, dueDate: "2024-10-25T23:59:59Z",
-    estimatedMinutes: 45, status: "Pending", completedAt: null 
-  },
-  { 
-    _id: "res004", title: "OWMS Onboarding Guide", type: "Document", url: "#",
-    assignedBy: { name: "Sarah Johnson", role: "HR Manager" }, dueDate: "2024-10-05T23:59:59Z",
-    estimatedMinutes: 30, status: "Completed", completedAt: "2024-09-15T10:00:00Z" 
-  },
-  { 
-    _id: "res005", title: "MongoDB Basics", type: "Link", url: "https://www.mongodb.com/docs",
-    assignedBy: { name: "Aswanth K", role: "PMO Lead" }, dueDate: "2024-11-01T23:59:59Z",
-    estimatedMinutes: 90, status: "Pending", completedAt: null 
-  },
-];
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
-const RESOURCE_TYPES = {
-  Video: { icon: Play, bg: 'bg-[#FEF2F2]', color: 'text-[#DC2626]' },
-  Document: { icon: FileText, bg: 'bg-[#EFF6FF]', color: 'text-[#2563EB]' },
-  Link: { icon: ExternalLink, bg: 'bg-[#DCFCE7]', color: 'text-[#16A34A]' },
-  Course: { icon: GraduationCap, bg: 'bg-[#F5F3FF]', color: 'text-[#7C3AED]' },
-};
-
-const formatDate = (isoStr) => {
-  const date = new Date(isoStr);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
-
-const getUrgencyClass = (isoStr) => {
-  const date = new Date(isoStr);
-  const now = new Date('2024-10-12T00:00:00Z'); // Fixed mock date
-  const diffTime = Math.ceil((date - now) / (1000 * 60 * 60 * 24));
-  
-  if (diffTime < 0) return 'text-[#DC2626]'; // Overdue
-  if (diffTime <= 3) return 'text-[#D97706]'; // Due soon
+const urgencyClass = (dueDate) => {
+  if (!dueDate) return 'text-[#64748B]';
+  const diff = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+  if (diff < 0)  return 'text-red-600';
+  if (diff <= 3) return 'text-amber-600';
   return 'text-[#64748B]';
 };
 
+const TYPE_STYLE = {
+  Video:    { icon: Play,          bg: 'bg-red-50',    color: 'text-red-600'    },
+  Document: { icon: FileText,      bg: 'bg-blue-50',   color: 'text-blue-600'   },
+  Link:     { icon: ExternalLink,  bg: 'bg-green-50',  color: 'text-green-600'  },
+  Course:   { icon: GraduationCap, bg: 'bg-purple-50', color: 'text-purple-600' },
+};
+
+const STATUS_BADGE = {
+  Pending:     'bg-slate-100 text-slate-700',
+  'In Progress': 'bg-blue-100 text-blue-700',
+  Completed:   'bg-green-100 text-green-700',
+};
+
 export default function InternLearning() {
-  const [resources, setResources] = useState(mockResources);
-  const [filter, setFilter] = useState('All');
+  const [data,       setData]       = useState({ progress: 0, total: 0, completed: 0, resources: [] });
+  const [loading,    setLoading]    = useState(true);
+  const [filter,     setFilter]     = useState('All');
+  const [updating,   setUpdating]   = useState(null);
+  const [justDone,   setJustDone]   = useState(null);
 
-  const completedCount = resources.filter(r => r.status === 'Completed').length;
-  const totalCount = resources.length;
-  const progressPercentage = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
-
-  const pendingCount = resources.filter(r => r.status !== 'Completed').length;
-  const estRemainingMins = resources.filter(r => r.status !== 'Completed').reduce((acc, curr) => acc + curr.estimatedMinutes, 0);
-
-  const handleStartContinue = (res) => {
-    // window.open(res.url, '_blank');
-    if (res.status === 'Pending') {
-      setResources(prev => prev.map(r => r._id === res._id ? { ...r, status: 'In Progress' } : r));
-    }
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await internAPI.getLearningResources();
+      const d = r.data?.data || r.data;
+      setData({
+        progress:  d?.progress  ?? 0,
+        total:     d?.total     ?? 0,
+        completed: d?.completed ?? 0,
+        resources: d?.resources ?? (Array.isArray(d) ? d : []),
+      });
+    } catch { toast.error('Failed to load learning resources'); }
+    finally { setLoading(false); }
   };
 
-  const handleMarkComplete = (id) => {
-    setResources(prev => prev.map(r => {
-      if (r._id === id) {
-        return { ...r, status: 'Completed', completedAt: new Date().toISOString(), justCompleted: true };
+  useEffect(() => { load(); }, []);
+
+  const handleStatus = async (id, status) => {
+    setUpdating(id);
+    try {
+      await internAPI.updateLearningStatus(id, { status });
+      if (status === 'Completed') {
+        setJustDone(id);
+        setTimeout(() => setJustDone(null), 2000);
       }
-      return r;
-    }));
-    
-    // Remove the completion animation flag after a delay
-    setTimeout(() => {
-      setResources(prev => prev.map(r => r._id === id ? { ...r, justCompleted: false } : r));
-    }, 2000);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update status');
+    } finally { setUpdating(null); }
   };
 
-  const filteredResources = resources.filter(r => filter === 'All' || r.status === filter);
+  const resources = data.resources;
+  const pending   = resources.filter(r => r.status !== 'Completed').length;
+  const estMins   = resources.filter(r => r.status !== 'Completed').reduce((a, r) => a + (r.estimatedMinutes || 0), 0);
+
+  const filtered = filter === 'All' ? resources : resources.filter(r => r.status === filter);
 
   return (
     <PageWrapper>
-      <div className="w-full flex flex-col gap-6 max-w-[1200px] mx-auto pb-10 font-sans">
-        
-        {/* HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mt-6 shrink-0">
+      <div className="w-full flex flex-col gap-6 max-w-[1200px] mx-auto pb-10 font-sans px-4 mt-6">
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 shrink-0">
           <div>
             <h1 className="text-2xl font-bold text-[#0F172A]">Learning Resources</h1>
-            <p className="text-sm text-[#64748B] mt-1">Training materials and resources assigned to you</p>
+            <p className="text-sm text-[#64748B] mt-1">Training materials assigned to you</p>
           </div>
-          <div className="bg-[#DCFCE7] text-[#16A34A] px-4 py-2 rounded-full font-bold text-sm shadow-sm flex items-center gap-2">
-            <CheckCircle size={18} />
-            {completedCount}/{totalCount} resources completed
+          <div className="bg-[#DCFCE7] text-[#16A34A] px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 shadow-sm">
+            <CheckCircle size={16} />
+            {data.completed}/{data.total} completed
           </div>
         </div>
 
-        {/* OVERALL PROGRESS BAR */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-sm mb-2">
+        {/* Progress bar */}
+        <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-[#0F172A] mb-3">Your Learning Progress</h2>
-          <div className="w-full h-3 bg-[#DBEAFE] rounded-full overflow-hidden mb-3">
-            <motion.div 
-              className="h-full bg-[#2563EB]" 
-              initial={{ width: 0 }}
-              animate={{ width: `${progressPercentage}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            />
+          <div className="w-full h-3 bg-blue-50 rounded-full overflow-hidden mb-3">
+            <motion.div className="h-full bg-[#2563EB] rounded-full"
+              initial={{ width: 0 }} animate={{ width: `${data.progress}%` }}
+              transition={{ duration: 0.8, ease: 'easeOut' }} />
           </div>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-sm">
-            <p className="font-bold text-[#0F172A]">{progressPercentage}% complete &middot; <span className="text-[#64748B] font-normal">{completedCount} of {totalCount} resources done</span></p>
-            <p className="text-[#64748B] mt-1 sm:mt-0">{pendingCount} resources remaining &middot; <span className="font-bold">Est. {Math.round(estRemainingMins/60)} hours</span></p>
+          <div className="flex flex-col sm:flex-row justify-between text-sm">
+            <p className="font-bold text-[#0F172A]">
+              {data.progress}% complete &middot; <span className="text-[#64748B] font-normal">{data.completed} of {data.total} done</span>
+            </p>
+            <p className="text-[#64748B] mt-1 sm:mt-0">
+              {pending} remaining &middot; <span className="font-bold">Est. {Math.round(estMins / 60)}h {estMins % 60}m</span>
+            </p>
           </div>
         </div>
 
-        {/* FILTER TABS */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+        {/* Filter tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {['All', 'Pending', 'In Progress', 'Completed'].map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
+            <button key={f} onClick={() => setFilter(f)}
               className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors whitespace-nowrap ${
-                filter === f ? 'bg-[#2563EB] text-white' : 'bg-white border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC]'
-              }`}
-            >
+                filter === f ? 'bg-[#2563EB] text-white' : 'bg-white border border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]'
+              }`}>
               {f}
             </button>
           ))}
         </div>
 
-        {/* RESOURCE CARDS GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <AnimatePresence>
-            {filteredResources.map(res => {
-              const typeStyle = RESOURCE_TYPES[res.type] || RESOURCE_TYPES.Document;
-              const Icon = typeStyle.icon;
-              
-              return (
-                <motion.div 
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  key={res._id} 
-                  className={`relative bg-white rounded-xl border p-5 transition-all overflow-hidden ${
-                    res.status === 'Completed' ? 'border-[#16A34A]/30' : 'border-[#E2E8F0] hover:border-[#2563EB] hover:shadow-sm'
-                  }`}
-                >
-                  {/* Completion Animation Overlay */}
-                  <AnimatePresence>
-                    {res.justCompleted && (
-                      <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-[#DCFCE7]/90 z-10 flex items-center justify-center backdrop-blur-sm"
-                      >
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: [0, 1.2, 1] }}
-                          transition={{ duration: 0.5 }}
-                        >
-                          <CheckCircle size={60} className="text-[#16A34A]" />
+        {/* Cards */}
+        {loading ? (
+          <div className="flex justify-center py-24">
+            <span className="material-symbols-outlined text-[32px] text-[#2563EB] animate-spin">sync</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <AnimatePresence>
+              {filtered.map(res => {
+                const ts  = TYPE_STYLE[res.type] || TYPE_STYLE.Document;
+                const Icon = ts.icon;
+                const isUpdating = updating === res._id;
+                const isDone     = justDone  === res._id;
+
+                return (
+                  <motion.div key={res._id} layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className={`relative bg-white rounded-xl border p-5 overflow-hidden transition-all ${
+                      res.status === 'Completed' ? 'border-green-200' : 'border-[#E2E8F0] hover:border-[#2563EB] hover:shadow-sm'
+                    }`}>
+
+                    {/* Completion flash */}
+                    <AnimatePresence>
+                      {isDone && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="absolute inset-0 bg-green-50/90 z-10 flex items-center justify-center backdrop-blur-sm rounded-xl">
+                          <motion.div initial={{ scale: 0 }} animate={{ scale: [0, 1.2, 1] }} transition={{ duration: 0.4 }}>
+                            <CheckCircle size={56} className="text-green-500" />
+                          </motion.div>
                         </motion.div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                      )}
+                    </AnimatePresence>
 
-                  <div className="flex justify-between items-start mb-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${typeStyle.bg} ${typeStyle.color}`}>
-                      <Icon size={20} />
-                    </div>
-                    <div>
-                      {res.status === 'Pending' && <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded">Pending</span>}
-                      {res.status === 'In Progress' && <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded">In Progress</span>}
-                      {res.status === 'Completed' && <span className="text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 px-2 py-0.5 rounded">Completed</span>}
-                    </div>
-                  </div>
-
-                  <h3 className="text-base font-bold text-[#0F172A] leading-snug mb-1">{res.title}</h3>
-                  <p className="text-xs text-[#64748B] mb-4">Assigned by {res.assignedBy.name}</p>
-
-                  <div className="flex items-center gap-4 mb-5">
-                    <div className="flex items-center gap-1.5">
-                      <CalendarDays size={14} className={getUrgencyClass(res.dueDate)} />
-                      <span className={`text-xs font-semibold ${getUrgencyClass(res.dueDate)}`}>
-                        {formatDate(res.dueDate)}
+                    <div className="flex justify-between items-start mb-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${ts.bg} ${ts.color}`}>
+                        <Icon size={20} />
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${STATUS_BADGE[res.status] || STATUS_BADGE.Pending}`}>
+                        {res.status}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Clock size={14} className="text-[#64748B]" />
-                      <span className="text-xs font-medium text-[#64748B]">{res.estimatedMinutes} mins</span>
+
+                    <h3 className="text-base font-bold text-[#0F172A] leading-snug mb-1">{res.title}</h3>
+                    {res.description && <p className="text-xs text-[#64748B] mb-2 line-clamp-2">{res.description}</p>}
+                    <p className="text-xs text-[#64748B] mb-4">
+                      Assigned by <span className="font-semibold text-[#0F172A]">{res.assignedBy?.name || '—'}</span>
+                    </p>
+
+                    <div className="flex items-center gap-4 mb-5 flex-wrap">
+                      {res.dueDate && (
+                        <div className="flex items-center gap-1.5">
+                          <CalendarDays size={13} className={urgencyClass(res.dueDate)} />
+                          <span className={`text-xs font-semibold ${urgencyClass(res.dueDate)}`}>{fmtDate(res.dueDate)}</span>
+                        </div>
+                      )}
+                      {res.estimatedMinutes > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={13} className="text-[#64748B]" />
+                          <span className="text-xs text-[#64748B]">{res.estimatedMinutes} mins</span>
+                        </div>
+                      )}
+                      {res.status === 'Completed' && res.completedAt && (
+                        <div className="flex items-center gap-1.5 text-green-600">
+                          <CheckCircle size={13} />
+                          <span className="text-xs font-semibold">Done {fmtDate(res.completedAt)}</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
 
-                  {res.status === 'Completed' && res.completedAt && (
-                    <div className="flex items-center gap-1.5 mb-5 text-[#16A34A]">
-                      <CheckCircle size={14} />
-                      <span className="text-xs font-semibold text-[#16A34A]">Completed on {formatDate(res.completedAt)}</span>
+                    <div className="pt-4 border-t border-[#E2E8F0] flex gap-3 flex-wrap">
+                      {res.url && (
+                        <a href={res.url} target="_blank" rel="noreferrer"
+                          className="text-sm font-bold text-[#2563EB] border border-[#2563EB] hover:bg-[#EFF6FF] py-2 px-4 rounded-lg transition-colors flex items-center gap-1.5">
+                          <ExternalLink size={14} /> Open
+                        </a>
+                      )}
+                      {res.status === 'Pending' && (
+                        <button disabled={isUpdating} onClick={() => handleStatus(res._id, 'In Progress')}
+                          className="bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50">
+                          {isUpdating ? 'Updating…' : 'Start Learning'}
+                        </button>
+                      )}
+                      {res.status === 'In Progress' && (
+                        <button disabled={isUpdating} onClick={() => handleStatus(res._id, 'Completed')}
+                          className="border border-green-500 text-green-600 hover:bg-green-50 text-sm font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50">
+                          {isUpdating ? 'Saving…' : 'Mark Complete'}
+                        </button>
+                      )}
+                      {res.status === 'Completed' && (
+                        <span className="text-sm text-[#64748B] font-medium py-2">✓ Completed</span>
+                      )}
                     </div>
-                  )}
-
-                  <div className="pt-4 border-t border-[#E2E8F0] flex gap-3 mt-auto">
-                    {res.status === 'Pending' && (
-                      <button onClick={() => handleStartContinue(res)} className="bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-bold py-2 px-4 rounded-lg transition-colors w-fit shadow-sm">
-                        Start Learning
-                      </button>
-                    )}
-                    {res.status === 'In Progress' && (
-                      <>
-                        <button onClick={() => handleStartContinue(res)} className="bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-bold py-2 px-4 rounded-lg transition-colors w-fit shadow-sm">
-                          Continue
-                        </button>
-                        <button onClick={() => handleMarkComplete(res._id)} className="border border-[#16A34A] text-[#16A34A] hover:bg-[#F0FDF4] text-sm font-bold py-2 px-4 rounded-lg transition-colors w-fit">
-                          Mark Complete
-                        </button>
-                      </>
-                    )}
-                    {res.status === 'Completed' && (
-                      <button onClick={() => handleStartContinue(res)} className="text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] text-sm font-bold py-2 px-4 rounded-lg transition-colors w-fit">
-                        Review Again
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-          {filteredResources.length === 0 && (
-            <div className="col-span-full py-12 text-center text-[#64748B]">
-              No resources found for the selected filter.
-            </div>
-          )}
-        </div>
-
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+            {filtered.length === 0 && !loading && (
+              <div className="col-span-full py-16 text-center">
+                <GraduationCap size={36} className="text-[#94A3B8] mx-auto mb-3" />
+                <p className="text-sm font-bold text-[#0F172A]">No resources found</p>
+                <p className="text-xs text-[#64748B] mt-1">
+                  {filter === 'All' ? 'Your HR or PMO will assign learning materials here.' : `No ${filter} resources.`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </PageWrapper>
   );

@@ -5,6 +5,8 @@ import { sendSuccess, sendError, sendPaginated } from '../../utils/apiResponse.j
 import { getPagination } from '../../utils/paginate.js';
 import { sendNotification } from '../../utils/sendNotification.js';
 import { sendWelcomeEmail } from '../../utils/sendEmail.js';
+import { syncEmployeeLeaveBalance } from '../../utils/syncLeaveBalance.js';
+import { autoAssignHR } from '../../utils/autoAssignHR.js';
 
 /**
  * GET /api/admin/users
@@ -71,7 +73,7 @@ export const getUsers = async (req, res, next) => {
  */
 export const createUser = async (req, res, next) => {
   try {
-    const { name, email, role, department, designation, employmentType, password, skills } = req.body;
+    const { name, email, role, department, designation, employmentType, password, skills, hrManager: hrManagerInput } = req.body;
 
     let roleId = role;
     if (!roleId) {
@@ -102,14 +104,14 @@ export const createUser = async (req, res, next) => {
     // Auto-generate employeeId
     const employeeId = await User.generateEmployeeId(empType);
 
-    // Generate temp password if not provided
-    const userPassword = password || `OWMS@${Math.floor(100000 + Math.random() * 900000)}`;
+    // Always generate a system temp password — admin never sees it, user must change on first login
+    const tempPassword = `OWMS@${Math.floor(100000 + Math.random() * 900000)}`;
 
     // Create user
     const user = await User.create({
       name,
       email: email.toLowerCase(),
-      password: userPassword,
+      password: tempPassword,
       role: roleId,
       department,
       designation,
@@ -117,14 +119,40 @@ export const createUser = async (req, res, next) => {
       employeeId,
       skills: skills || [],
       joinDate: new Date(),
+      hrManager: hrManagerInput || undefined,
+      mustChangePassword: true,
     });
+
+    // Auto-assign HR if not provided
+    let assignedHR       = null;
+    let hrCapExceeded    = false;
+    let autoAssigned     = false;
+
+    if (!hrManagerInput) {
+      const result = await autoAssignHR(user);
+      if (result.hrUser) {
+        user.hrManager = result.hrUser._id;
+        await user.save({ validateBeforeSave: false });
+        assignedHR    = result.hrUser;
+        hrCapExceeded = result.capExceeded;
+        autoAssigned  = true;
+      }
+    } else {
+      assignedHR = await User.findById(hrManagerInput).select('_id name');
+    }
 
     // Fetch populated user for response
     const populatedUser = await User.findById(user._id)
       .populate('role', 'name slug color')
-      .populate('department', 'name code');
+      .populate('department', 'name code')
+      .populate('hrManager', 'name employeeId');
 
-    // Send notification to the new user
+    // Auto-create leave balance for non-interns
+    if (empType !== 'Intern') {
+      await syncEmployeeLeaveBalance(user._id).catch(() => {});
+    }
+
+    // Notify the new user
     await sendNotification({
       recipient: user._id,
       type: 'user_created',
@@ -134,6 +162,30 @@ export const createUser = async (req, res, next) => {
       sender: req.user._id,
     });
 
+    // Notify the assigned HR
+    if (assignedHR) {
+      await sendNotification({
+        recipient: assignedHR._id,
+        type:      'system_alert',
+        title:     'New Onboarding Assignment',
+        message:   `You have been assigned as the onboarding HR for ${name} (${employeeId}).`,
+        link:      '/hr/onboarding',
+        sender:    req.user._id,
+      });
+    }
+
+    // If cap was exceeded, also warn the admin who created the user
+    if (hrCapExceeded && assignedHR) {
+      await sendNotification({
+        recipient: req.user._id,
+        type:      'system_alert',
+        title:     'HR Onboarding Cap Exceeded',
+        message:   `${assignedHR.name} has exceeded the onboarding HR limit. Consider reassigning ${name} to another HR.`,
+        link:      '/hr/onboarding',
+        sender:    req.user._id,
+      });
+    }
+
     // Send welcome email with credentials
     let emailWarning = null;
     try {
@@ -141,7 +193,7 @@ export const createUser = async (req, res, next) => {
         to: user.email,
         name: user.name,
         email: user.email,
-        tempPassword: userPassword,
+        tempPassword,
         employeeId,
       });
     } catch (emailErr) {
@@ -151,8 +203,10 @@ export const createUser = async (req, res, next) => {
 
     sendSuccess(res, {
       ...populatedUser.toJSON(),
-      tempPassword: userPassword,
-      ...(emailWarning && { warning: emailWarning }),
+      tempPassword,
+      ...(emailWarning  && { warning: emailWarning }),
+      ...(autoAssigned  && { autoAssignedHR: assignedHR?.name }),
+      ...(hrCapExceeded && { hrCapWarning: `${assignedHR?.name} has exceeded the onboarding HR cap.` }),
     }, 'User created successfully', 201);
   } catch (error) {
     next(error);
@@ -206,8 +260,9 @@ export const updateUser = async (req, res, next) => {
       return sendError(res, 'User not found', 404);
     }
 
-    // Track role change for notifications
-    const oldRole = user.role?.toString();
+    // Track role + hrManager change for notifications
+    const oldRole      = user.role?.toString();
+    const oldHRManager = user.hrManager?.toString();
 
     // Update fields
     if (name) user.name = name;
@@ -238,6 +293,30 @@ export const updateUser = async (req, res, next) => {
         link: '/profile',
         sender: req.user._id,
       });
+    }
+
+    // If hrManager changed, notify both old and new HR
+    if (hrManager !== undefined && hrManager?.toString() !== oldHRManager) {
+      if (hrManager) {
+        await sendNotification({
+          recipient: hrManager,
+          type:      'system_alert',
+          title:     'New Onboarding Assignment',
+          message:   `You have been assigned as the onboarding HR for ${user.name} (${user.employeeId}).`,
+          link:      '/hr/onboarding',
+          sender:    req.user._id,
+        });
+      }
+      if (oldHRManager) {
+        await sendNotification({
+          recipient: oldHRManager,
+          type:      'system_alert',
+          title:     'Onboarding Reassigned',
+          message:   `${user.name} (${user.employeeId}) has been reassigned to another HR.`,
+          link:      '/hr/onboarding',
+          sender:    req.user._id,
+        });
+      }
     }
 
     // Return populated user

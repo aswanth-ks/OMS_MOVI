@@ -6,7 +6,9 @@ import { ProtectedRoute, ROLE_HOME } from './routes/ProtectedRoute';
 // Auth
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 import Unauthorized from './pages/auth/Unauthorized';
+import ForceChangePassword from './pages/auth/ForceChangePassword';
 
 // Intern
 import InternDashboard from './pages/intern/Dashboard';
@@ -40,6 +42,8 @@ import HRPerformance from './pages/hr/Performance';
 import HRCommunication from './pages/hr/Communication';
 import HRAssignTask from './pages/hr/AssignTask';
 import HRTaskBoard from './pages/hr/TaskBoard';
+import HRProjects from './pages/hr/Projects';
+import HRLeave from './pages/hr/Leave';
 import HRProfile from './pages/hr/Profile';
 
 // PMO
@@ -52,6 +56,8 @@ import PMOTimeline from './pages/pmo/Timeline';
 import PMOApprovals from './pages/pmo/Approvals';
 import PMOTeam from './pages/pmo/Team';
 import PMOInterns from './pages/pmo/Interns';
+import PMOInternDetails from './pages/pmo/InternDetails';
+import PMOEmployeeDetails from './pages/pmo/EmployeeDetails';
 import PMOReports from './pages/pmo/Reports';
 import PMOProfile from './pages/pmo/Profile';
 
@@ -93,7 +99,9 @@ export default function App() {
       {/* Public */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
+      <Route path="/change-password" element={<ForceChangePassword />} />
       <Route path="/" element={<RoleRedirect />} />
 
       {/* Intern */}
@@ -126,6 +134,8 @@ export default function App() {
       <Route path="/hr/documents" element={<ProtectedRoute allowedRoles={['hr']}><HRDocuments /></ProtectedRoute>} />
       <Route path="/hr/tasks" element={<ProtectedRoute allowedRoles={['hr']}><HRTaskBoard /></ProtectedRoute>} />
       <Route path="/hr/performance" element={<ProtectedRoute allowedRoles={['hr']}><HRPerformance /></ProtectedRoute>} />
+      <Route path="/hr/projects" element={<ProtectedRoute allowedRoles={['hr']}><HRProjects /></ProtectedRoute>} />
+      <Route path="/hr/leave" element={<ProtectedRoute allowedRoles={['hr']}><HRLeave /></ProtectedRoute>} />
       <Route path="/hr/communication" element={<ProtectedRoute allowedRoles={['hr']}><HRCommunication /></ProtectedRoute>} />
       <Route path="/hr/tasks/new" element={<ProtectedRoute allowedRoles={['hr']}><HRAssignTask /></ProtectedRoute>} />
       <Route path="/hr/profile" element={<ProtectedRoute allowedRoles={['hr']}><HRProfile /></ProtectedRoute>} />
@@ -137,6 +147,8 @@ export default function App() {
       <Route path="/pmo/tasks" element={<ProtectedRoute allowedRoles={['pmo']}><PMOTasks /></ProtectedRoute>} />
       <Route path="/pmo/team" element={<ProtectedRoute allowedRoles={['pmo']}><PMOTeam /></ProtectedRoute>} />
       <Route path="/pmo/interns" element={<ProtectedRoute allowedRoles={['pmo']}><PMOInterns /></ProtectedRoute>} />
+      <Route path="/pmo/interns/:id" element={<ProtectedRoute allowedRoles={['pmo']}><PMOInternDetails /></ProtectedRoute>} />
+      <Route path="/pmo/employees/:id" element={<ProtectedRoute allowedRoles={['pmo']}><PMOEmployeeDetails /></ProtectedRoute>} />
       <Route path="/pmo/monitoring" element={<ProtectedRoute allowedRoles={['pmo']}><PMOMonitoring /></ProtectedRoute>} />
       <Route path="/pmo/timeline" element={<ProtectedRoute allowedRoles={['pmo']}><PMOTimeline /></ProtectedRoute>} />
       <Route path="/pmo/approvals" element={<ProtectedRoute allowedRoles={['pmo']}><PMOApprovals /></ProtectedRoute>} />

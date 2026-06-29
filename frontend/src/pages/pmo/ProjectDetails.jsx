@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ChevronRight, Pencil, Download, Archive, Trash2, CheckSquare, Clock, AlertCircle, 
-  Users, GraduationCap, Flag, FileText, Plus, UserPlus, File, Eye, X 
+import { motion } from 'framer-motion';
+import {
+  ChevronRight, Pencil, Download, Archive, Trash2, CheckSquare, Clock, AlertCircle,
+  GraduationCap, Flag, FileText, Plus, UserPlus, File, Eye
 } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
 import { TaskDetailModal } from '../../components/pmo/TaskDetailModal';
@@ -37,8 +37,22 @@ export default function ProjectDetails() {
   const [milestoneData, setMilestoneData] = useState({ name: '', date: '' });
   const [taskData, setTaskData] = useState({ title: '', description: '', assignedTo: '', priority: 'Medium', effortPoints: 5, dueDate: '' });
   const [availablePool, setAvailablePool] = useState([]);
-  const [selectedMembers, setSelectedMembers] = useState([]);
-  const [selectedInterns, setSelectedInterns] = useState([]);
+  const [availableInternPool, setAvailableInternPool] = useState([]);
+
+  // Team wizard state
+  const [teamWizardStep, setTeamWizardStep] = useState(1);
+  const [teamRequirements, setTeamRequirements] = useState([]);
+  const [reqInput, setReqInput] = useState({ role: '', qty: 1, skills: [], experience: '' });
+  const [selectedForTeam, setSelectedForTeam] = useState({}); // { userId: roleName }
+
+  // Intern profile modal
+  const [viewingIntern, setViewingIntern] = useState(null);
+
+  // Intern wizard state
+  const [internWizardStep, setInternWizardStep] = useState(1);
+  const [internRequirements, setInternRequirements] = useState([]);
+  const [internReqInput, setInternReqInput] = useState({ role: '', qty: 1, skills: [], experience: '' });
+  const [selectedForIntern, setSelectedForIntern] = useState({}); // { userId: roleName }
 
   const TABS = ['Overview', 'Tasks', 'Team', 'Interns', 'Timeline', 'Files', 'Activity'];
 
@@ -59,10 +73,14 @@ export default function ProjectDetails() {
 
   const fetchAvailablePool = async () => {
     try {
-      const res = await pmoAPI.getAvailableMembers();
-      setAvailablePool(res.data.data || []);
-    } catch (err) {
-      console.warn('Failed to load available employees');
+      const [empRes, internRes] = await Promise.all([
+        pmoAPI.getAvailableMembers({ type: 'employee' }),
+        pmoAPI.getAvailableMembers({ type: 'intern' }),
+      ]);
+      setAvailablePool(empRes.data.data || []);
+      setAvailableInternPool(internRes.data.data || []);
+    } catch {
+      console.warn('Failed to load available pool');
     }
   };
 
@@ -160,29 +178,31 @@ export default function ProjectDetails() {
   };
 
   const handleTeamSubmit = async () => {
+    const entries = Object.entries(selectedForTeam);
+    if (entries.length === 0) { toast.error('Select at least one team member.'); return; }
     try {
-      const payload = selectedMembers.map(userId => {
-        const emp = availablePool.find(e => e._id === userId);
-        return {
-          userId,
-          role: emp?.designation || 'Developer'
-        };
-      });
+      const payload = entries.map(([userId, role]) => ({ userId, role }));
       await pmoAPI.addProjectTeam(id, payload);
-      toast.success('Team members allocated successfully');
-      setSelectedMembers([]);
+      toast.success('Team members added successfully');
+      setSelectedForTeam({});
+      setTeamRequirements([]);
+      setTeamWizardStep(1);
       setIsTeamModalOpen(false);
       fetchProjectDetails();
     } catch (err) {
-      toast.error('Failed to allocate team members');
+      toast.error('Failed to add team members');
     }
   };
 
   const handleInternSubmit = async () => {
+    const internIds = Object.keys(selectedForIntern);
+    if (internIds.length === 0) { toast.error('Select at least one intern.'); return; }
     try {
-      await pmoAPI.assignProjectInterns(id, selectedInterns);
+      await pmoAPI.assignProjectInterns(id, internIds);
       toast.success('Interns assigned successfully');
-      setSelectedInterns([]);
+      setSelectedForIntern({});
+      setInternRequirements([]);
+      setInternWizardStep(1);
       setIsInternModalOpen(false);
       fetchProjectDetails();
     } catch (err) {
@@ -360,13 +380,13 @@ export default function ProjectDetails() {
         );
       case 'Interns':
         return (
-          <InternsTab 
-            interns={internsWithTaskStats} 
-            navigate={navigate} 
+          <InternsTab
+            interns={internsWithTaskStats}
             onAssignInternClick={() => {
               fetchAvailablePool();
               setIsInternModalOpen(true);
             }}
+            onViewInternClick={(intern) => navigate(`/pmo/interns/${intern.user?._id}`)}
           />
         );
       case 'Timeline':
@@ -670,89 +690,111 @@ export default function ProjectDetails() {
         </div>
       )}
 
-      {/* --- ALLOCATE TEAM MEMBER MODAL --- */}
+      {/* --- ADD TEAM MEMBER WIZARD --- */}
       {isTeamModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[70vh] text-left">
-            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-[#0F172A] flex items-center gap-2">
-                <UserPlus size={18} className="text-[#2563EB]" /> Add Team Member
-              </h3>
-              <button onClick={() => setIsTeamModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
-              <p className="text-xs text-[#64748B] mb-2">Select employees from the company directory to allocate to this project:</p>
-              {availablePool.filter(emp => emp.employmentType !== 'Intern' && !project.team.some(t => t.user?._id === emp._id)).map(emp => {
-                const isChecked = selectedMembers.some(id => id === emp._id);
-                return (
-                  <div key={emp._id} className="flex items-center justify-between p-3 border border-[#E2E8F0] rounded-xl bg-[#F8FAFC]">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" checked={isChecked} onChange={() => {
-                        if (isChecked) {
-                          setSelectedMembers(selectedMembers.filter(id => id !== emp._id));
-                        } else {
-                          setSelectedMembers([...selectedMembers, emp._id]);
-                        }
-                      }} className="w-4 h-4 text-[#2563EB] border-[#E2E8F0] rounded cursor-pointer" />
-                      <div>
-                        <p className="text-sm font-bold text-[#0F172A]">{emp.name}</p>
-                        <p className="text-xs text-[#64748B]">{emp.designation || 'Staff'}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {availablePool.filter(emp => emp.employmentType !== 'Intern' && !project.team.some(t => t.user?._id === emp._id)).length === 0 && (
-                <p className="text-center py-10 text-xs text-[#64748B] italic">No available team members in department pool.</p>
-              )}
-            </div>
-            <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2 shrink-0">
-              <button onClick={() => setIsTeamModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
-              <button onClick={handleTeamSubmit} disabled={selectedMembers.length === 0} className="px-4 py-2 text-sm font-bold bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Allocate Members</button>
-            </div>
-          </div>
-        </div>
+        <TeamWizardModal
+          step={teamWizardStep}
+          setStep={setTeamWizardStep}
+          requirements={teamRequirements}
+          setRequirements={setTeamRequirements}
+          reqInput={reqInput}
+          setReqInput={setReqInput}
+          availablePool={availablePool.filter(emp => emp.employmentType !== 'Intern' && !project.team.some(t => t.user?._id === emp._id))}
+          selectedForTeam={selectedForTeam}
+          setSelectedForTeam={setSelectedForTeam}
+          onClose={() => { setIsTeamModalOpen(false); setTeamWizardStep(1); setTeamRequirements([]); setSelectedForTeam({}); setReqInput({ role: '', qty: 1, skills: [], experience: '' }); }}
+          onSubmit={handleTeamSubmit}
+        />
       )}
 
-      {/* --- ASSIGN INTERN MODAL --- */}
+      {/* --- ASSIGN INTERN WIZARD --- */}
       {isInternModalOpen && (
+        <InternWizardModal
+          step={internWizardStep}
+          setStep={setInternWizardStep}
+          requirements={internRequirements}
+          setRequirements={setInternRequirements}
+          reqInput={internReqInput}
+          setReqInput={setInternReqInput}
+          availablePool={availableInternPool.filter(intern => !project.interns.some(i => i.user?._id === intern._id))}
+          selectedForIntern={selectedForIntern}
+          setSelectedForIntern={setSelectedForIntern}
+          onClose={() => {
+            setIsInternModalOpen(false);
+            setInternWizardStep(1);
+            setInternRequirements([]);
+            setSelectedForIntern({});
+            setInternReqInput({ role: '', qty: 1, skills: [], experience: '' });
+          }}
+          onSubmit={handleInternSubmit}
+        />
+      )}
+
+      {/* --- INTERN PROFILE MODAL --- */}
+      {viewingIntern && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[70vh] text-left">
-            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-left">
+            <div className="px-5 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center">
               <h3 className="font-bold text-[#0F172A] flex items-center gap-2">
-                <GraduationCap size={18} className="text-[#2563EB]" /> Assign Intern
+                <GraduationCap size={18} className="text-[#7C3AED]" /> Intern Profile
               </h3>
-              <button onClick={() => setIsInternModalOpen(false)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full"><span className="material-symbols-outlined text-[20px] flex items-center justify-center">close</span></button>
+              <button onClick={() => setViewingIntern(null)} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
-              <p className="text-xs text-[#64748B] mb-2">Select interns to assign to this project:</p>
-              {availablePool.filter(emp => emp.employmentType === 'Intern' && !project.interns.some(i => i.user?._id === emp._id)).map(intern => {
-                const isChecked = selectedInterns.some(id => id === intern._id);
-                return (
-                  <div key={intern._id} className="flex items-center justify-between p-3 border border-[#E2E8F0] rounded-xl bg-[#F8FAFC]">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" checked={isChecked} onChange={() => {
-                        if (isChecked) {
-                          setSelectedInterns(selectedInterns.filter(id => id !== intern._id));
-                        } else {
-                          setSelectedInterns([...selectedInterns, intern._id]);
-                        }
-                      }} className="w-4 h-4 text-[#2563EB] border-[#E2E8F0] rounded cursor-pointer" />
-                      <div>
-                        <p className="text-sm font-bold text-[#0F172A]">{intern.name}</p>
-                        <p className="text-xs text-[#64748B]">{intern.college || 'Intern'}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {availablePool.filter(emp => emp.employmentType === 'Intern' && !project.interns.some(i => i.user?._id === emp._id)).length === 0 && (
-                <p className="text-center py-10 text-xs text-[#64748B] italic">No available interns in pool.</p>
-              )}
+            <div className="p-6">
+              {/* Avatar + name */}
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 rounded-full bg-[#F5F3FF] text-[#7C3AED] flex items-center justify-center text-xl font-bold shrink-0">
+                  {(viewingIntern.user?.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h2 className="text-[17px] font-bold text-[#0F172A]">{viewingIntern.user?.name || '—'}</h2>
+                  <p className="text-[13px] text-[#64748B]">{viewingIntern.user?.designation || 'Intern'}</p>
+                  <span className="inline-block mt-1 text-[11px] font-bold bg-[#F5F3FF] text-[#7C3AED] px-2 py-0.5 rounded-full">Intern</span>
+                </div>
+              </div>
+
+              {/* Details grid */}
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                  <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">College</p>
+                  <p className="text-[13px] font-semibold text-[#0F172A]">{viewingIntern.user?.college || '—'}</p>
+                </div>
+                <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                  <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Department</p>
+                  <p className="text-[13px] font-semibold text-[#0F172A]">{viewingIntern.user?.department?.name || '—'}</p>
+                </div>
+                <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                  <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Tasks Assigned</p>
+                  <p className="text-[20px] font-bold text-[#0F172A]">{viewingIntern.tasksAssigned}</p>
+                </div>
+                <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                  <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">Tasks Done</p>
+                  <p className="text-[20px] font-bold text-[#16A34A]">{viewingIntern.tasksDone}</p>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div>
+                <div className="flex justify-between text-[11px] font-bold mb-1.5">
+                  <span className="text-[#64748B]">Completion</span>
+                  <span className="text-[#0F172A]">
+                    {viewingIntern.tasksAssigned > 0
+                      ? Math.round((viewingIntern.tasksDone / viewingIntern.tasksAssigned) * 100)
+                      : 0}%
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-[#F1F5F9] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#7C3AED] rounded-full transition-all"
+                    style={{ width: `${viewingIntern.tasksAssigned > 0 ? Math.round((viewingIntern.tasksDone / viewingIntern.tasksAssigned) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="px-5 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end gap-2 shrink-0">
-              <button onClick={() => setIsInternModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Cancel</button>
-              <button onClick={handleInternSubmit} disabled={selectedInterns.length === 0} className="px-4 py-2 text-sm font-bold bg-[#2563EB] text-white hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Assign Interns</button>
+            <div className="px-5 py-3 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
+              <button onClick={() => setViewingIntern(null)} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg">Close</button>
             </div>
           </div>
         </div>
@@ -996,7 +1038,7 @@ const TeamTab = ({ team, navigate, onAddTeamMemberClick, onAssignTaskClick }) =>
             </div>
             <WorkloadBar percentage={member.workload} size="sm" />
             <div className="mt-5 flex gap-2">
-              <button onClick={(e) => { e.stopPropagation(); if(member.user?._id) navigate(`/hr/employees/${member.user._id}`); }} className="flex-1 py-1.5 border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC] transition-colors">View Profile</button>
+              <button onClick={(e) => { e.stopPropagation(); if(member.user?._id) navigate(`/pmo/employees/${member.user._id}`); }} className="flex-1 py-1.5 border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC] transition-colors">View Profile</button>
               <button onClick={() => onAssignTaskClick(member.user?._id)} className="flex-1 py-1.5 border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F8FAFC] transition-colors">Assign Task</button>
             </div>
           </div>
@@ -1009,7 +1051,7 @@ const TeamTab = ({ team, navigate, onAddTeamMemberClick, onAssignTaskClick }) =>
   </div>
 );
 
-const InternsTab = ({ interns, navigate, onAssignInternClick }) => (
+const InternsTab = ({ interns, onAssignInternClick, onViewInternClick }) => (
   <div className="space-y-6 text-left">
     <div className="flex justify-between items-center">
       <h2 className="text-lg font-bold text-[#0F172A]">Assigned Interns ({interns.length})</h2>
@@ -1031,7 +1073,7 @@ const InternsTab = ({ interns, navigate, onAssignInternClick }) => (
             </div>
             <p className="text-xs font-bold text-[#64748B] mb-5">{intern.tasksDone} of {intern.tasksAssigned} tasks done</p>
             <div className="mt-auto flex gap-2 w-full">
-              <button onClick={() => { if(intern.user?._id) navigate(`/hr/interns/${intern.user._id}`); }} className="flex-1 py-2 bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F1F5F9]">View Profile</button>
+              <button onClick={() => onViewInternClick(intern)} className="flex-1 py-2 bg-[#F8FAFC] border border-[#E2E8F0] text-[#0F172A] text-xs font-bold rounded-lg hover:bg-[#F1F5F9]">View Profile</button>
             </div>
           </div>
         );
@@ -1075,3 +1117,579 @@ const ActivityTab = ({ project }) => (
     </div>
   </div>
 );
+
+// ─── Team Wizard Modal ────────────────────────────────────────────────────────
+
+const ROLE_OPTIONS = [
+  'Frontend Developer', 'Backend Developer', 'Full Stack Developer',
+  'UI/UX Designer', 'QA Engineer', 'DevOps Engineer', 'Data Engineer', 'Mobile Developer',
+];
+
+const SKILL_OPTIONS = [
+  'React', 'Angular', 'Vue', 'Node.js', 'Python', 'Java', 'Go',
+  'TypeScript', 'AWS', 'Docker', 'MongoDB', 'PostgreSQL', 'Redis', 'GraphQL',
+];
+
+const EXPERIENCE_OPTIONS = ['Any', 'Junior (0–2 yrs)', 'Mid (2–5 yrs)', 'Senior (5+ yrs)'];
+
+const ROLE_KEYWORDS = {
+  'Frontend Developer':  ['frontend', 'front-end', 'react', 'angular', 'vue', 'ui'],
+  'Backend Developer':   ['backend', 'back-end', 'node', 'django', 'spring', 'api'],
+  'Full Stack Developer':['full stack', 'fullstack', 'full-stack'],
+  'UI/UX Designer':      ['ui', 'ux', 'designer', 'design', 'figma'],
+  'QA Engineer':         ['qa', 'quality', 'test', 'automation', 'sdet'],
+  'DevOps Engineer':     ['devops', 'cloud', 'infrastructure', 'sre', 'cicd'],
+  'Data Engineer':       ['data', 'analytics', 'ml', 'ai', 'scientist'],
+  'Mobile Developer':    ['mobile', 'android', 'ios', 'flutter', 'react native'],
+};
+
+const matchesRole = (emp, roleName) => {
+  const desig = (emp.designation || '').toLowerCase();
+  const keywords = ROLE_KEYWORDS[roleName] || [roleName.toLowerCase().split(' ')[0]];
+  return keywords.some(kw => desig.includes(kw));
+};
+
+const TeamWizardModal = ({
+  step, setStep, requirements, setRequirements,
+  reqInput, setReqInput, availablePool,
+  selectedForTeam, setSelectedForTeam,
+  onClose, onSubmit,
+}) => {
+  const toggleSkill = (skill) => {
+    setReqInput(prev => ({
+      ...prev,
+      skills: prev.skills.includes(skill)
+        ? prev.skills.filter(s => s !== skill)
+        : [...prev.skills, skill],
+    }));
+  };
+
+  const addRequirement = () => {
+    if (!reqInput.role) return;
+    setRequirements(prev => [...prev, { ...reqInput, qty: parseInt(reqInput.qty) || 1 }]);
+    setReqInput({ role: '', qty: 1, skills: [], experience: '' });
+  };
+
+  const removeRequirement = (idx) => setRequirements(prev => prev.filter((_, i) => i !== idx));
+
+  const toggleSelect = (emp, roleName) => {
+    setSelectedForTeam(prev => {
+      if (prev[emp._id]) {
+        const next = { ...prev };
+        delete next[emp._id];
+        return next;
+      }
+      return { ...prev, [emp._id]: roleName };
+    });
+  };
+
+  // For step 2: group matching employees per requirement
+  const grouped = requirements.map(req => ({
+    req,
+    matches: availablePool.filter(emp => matchesRole(emp, req.role)),
+  }));
+
+  const totalSelected = Object.keys(selectedForTeam).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col h-[80vh] text-left">
+
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-3">
+            <UserPlus size={20} className="text-[#2563EB]" />
+            <div>
+              <h2 className="text-[15px] font-bold text-[#0F172A]">Add Team Members</h2>
+              <p className="text-[12px] text-[#64748B]">Step {step} of 2 — {step === 1 ? 'Define Requirements' : 'Select Employees'}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        {/* Progress */}
+        <div className="w-full h-1 bg-[#F1F5F9] shrink-0">
+          <div className="h-full bg-[#2563EB] transition-all duration-300" style={{ width: `${(step / 2) * 100}%` }} />
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+
+          {/* STEP 1: Requirements */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-[15px] font-bold text-[#0F172A] mb-1">Resource Requirements</h3>
+                <p className="text-[12px] text-[#64748B]">Define what roles you need. Then we'll show you matching available employees.</p>
+              </div>
+
+              {/* Input row */}
+              <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#0F172A] mb-1">Role Needed</label>
+                    <select
+                      value={reqInput.role}
+                      onChange={e => setReqInput(p => ({ ...p, role: e.target.value }))}
+                      className="w-full p-2 bg-white border border-[#E2E8F0] rounded-lg text-[13px] outline-none focus:border-[#2563EB] cursor-pointer"
+                    >
+                      <option value="">Select a role...</option>
+                      {ROLE_OPTIONS.map(r => <option key={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#0F172A] mb-1">Quantity</label>
+                    <input
+                      type="number" min="1" max="20"
+                      value={reqInput.qty}
+                      onChange={e => setReqInput(p => ({ ...p, qty: e.target.value }))}
+                      className="w-full p-2 bg-white border border-[#E2E8F0] rounded-lg text-[13px] outline-none focus:border-[#2563EB]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-[#0F172A] mb-2">Skills Required <span className="font-normal text-[#64748B]">(optional)</span></label>
+                  <div className="flex flex-wrap gap-2">
+                    {SKILL_OPTIONS.map(skill => (
+                      <button
+                        key={skill}
+                        onClick={() => toggleSkill(skill)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
+                          reqInput.skills.includes(skill)
+                            ? 'bg-[#2563EB] text-white border-[#2563EB]'
+                            : 'bg-white text-[#64748B] border-[#E2E8F0] hover:border-[#2563EB] hover:text-[#2563EB]'
+                        }`}
+                      >
+                        {skill}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-[#0F172A] mb-1">Experience Level <span className="font-normal text-[#64748B]">(optional)</span></label>
+                  <div className="flex gap-2">
+                    {EXPERIENCE_OPTIONS.map(exp => (
+                      <button
+                        key={exp}
+                        onClick={() => setReqInput(p => ({ ...p, experience: p.experience === exp ? '' : exp }))}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                          reqInput.experience === exp
+                            ? 'bg-[#0F172A] text-white border-[#0F172A]'
+                            : 'bg-white text-[#64748B] border-[#E2E8F0] hover:border-[#0F172A]'
+                        }`}
+                      >
+                        {exp}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={addRequirement}
+                  disabled={!reqInput.role}
+                  className="w-full py-2 bg-[#0F172A] text-white rounded-lg text-[13px] font-bold hover:bg-[#334155] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Plus size={14} /> Add Requirement
+                </button>
+              </div>
+
+              {/* Requirements list */}
+              <div className="space-y-2">
+                {requirements.map((req, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-[18px] text-[#2563EB]">person_search</span>
+                      <div>
+                        <p className="text-[13px] font-bold text-[#0F172A]">{req.role}</p>
+                        <p className="text-[11px] text-[#64748B]">
+                          Qty: {req.qty}
+                          {req.skills.length > 0 && ` · ${req.skills.join(', ')}`}
+                          {req.experience && ` · ${req.experience}`}
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => removeRequirement(idx)} className="text-[#EF4444] hover:bg-red-50 p-1 rounded-lg">
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                ))}
+                {requirements.length === 0 && (
+                  <div className="text-center py-8 text-[12px] text-[#94A3B8] border-2 border-dashed border-[#E2E8F0] rounded-xl">
+                    No requirements added yet. Add at least one above.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Matching Employees */}
+          {step === 2 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-[15px] font-bold text-[#0F172A] mb-1">Available Employees</h3>
+                <p className="text-[12px] text-[#64748B]">Only free employees matching your requirements are shown. Click <strong>+</strong> to select.</p>
+              </div>
+
+              {grouped.map(({ req, matches }, idx) => (
+                <div key={idx}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[12px] font-bold text-[#0F172A] uppercase tracking-wide">{req.role}</span>
+                    <span className="text-[11px] text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded-full">Need {req.qty}</span>
+                    <span className="text-[11px] text-[#16A34A] bg-[#DCFCE7] px-2 py-0.5 rounded-full">{matches.length} available</span>
+                  </div>
+
+                  {matches.length === 0 ? (
+                    <div className="text-[12px] text-[#94A3B8] italic py-3 px-4 border border-dashed border-[#E2E8F0] rounded-xl">
+                      No available employees match this role right now.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {matches.map(emp => {
+                        const isSelected = !!selectedForTeam[emp._id];
+                        const initial = emp.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                        return (
+                          <div key={emp._id} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                            isSelected ? 'bg-[#EFF6FF] border-[#BFDBFE]' : 'bg-white border-[#E2E8F0] hover:border-[#93C5FD]'
+                          }`}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-[12px] bg-[#EFF6FF] text-[#1D4ED8] shrink-0">
+                                {initial}
+                              </div>
+                              <div>
+                                <p className="text-[13px] font-bold text-[#0F172A] leading-tight">{emp.name}</p>
+                                <p className="text-[11px] text-[#64748B]">{emp.designation || emp.role?.name || 'Employee'} · {emp.department?.name || ''}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => toggleSelect(emp, req.role)}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+                                isSelected
+                                  ? 'bg-[#EF4444] text-white'
+                                  : 'bg-[#E2E8F0] text-[#475569] hover:bg-[#2563EB] hover:text-white'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[15px]">{isSelected ? 'remove' : 'add'}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {grouped.length === 0 && (
+                <div className="text-center py-12 text-[#94A3B8] text-[13px]">No requirements defined.</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
+          <button
+            onClick={() => step === 1 ? onClose() : setStep(1)}
+            className="px-4 py-2 text-[13px] font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg border border-[#E2E8F0] bg-white"
+          >
+            {step === 1 ? 'Cancel' : 'Back'}
+          </button>
+
+          {step === 1 ? (
+            <button
+              onClick={() => setStep(2)}
+              disabled={requirements.length === 0}
+              className="px-5 py-2 bg-[#2563EB] text-white rounded-lg text-[13px] font-bold hover:bg-[#1D4ED8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              Next — Select Employees <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          ) : (
+            <button
+              onClick={onSubmit}
+              disabled={totalSelected === 0}
+              className="px-5 py-2 bg-[#10B981] text-white rounded-lg text-[13px] font-bold hover:bg-[#059669] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[16px]">group_add</span>
+              Add {totalSelected > 0 ? totalSelected : ''} Member{totalSelected !== 1 ? 's' : ''} to Project
+            </button>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+// ─── Intern Wizard Modal ──────────────────────────────────────────────────────
+
+const INTERN_ROLE_OPTIONS = [
+  'Full Stack Intern', 'Frontend Intern', 'Backend Intern',
+  'UI/UX Intern', 'QA Intern', 'Data Intern', 'DevOps Intern', 'Mobile Intern',
+];
+
+const INTERN_ROLE_KEYWORDS = {
+  'Full Stack Intern':  ['full stack', 'fullstack', 'full-stack', 'developer', 'software'],
+  'Frontend Intern':    ['frontend', 'front-end', 'react', 'angular', 'vue', 'ui'],
+  'Backend Intern':     ['backend', 'back-end', 'node', 'server', 'api'],
+  'UI/UX Intern':       ['ui', 'ux', 'designer', 'design', 'figma'],
+  'QA Intern':          ['qa', 'quality', 'test', 'automation'],
+  'Data Intern':        ['data', 'analytics', 'ml', 'ai'],
+  'DevOps Intern':      ['devops', 'cloud', 'infrastructure'],
+  'Mobile Intern':      ['mobile', 'android', 'ios', 'flutter'],
+};
+
+const matchesInternRole = (intern, roleName) => {
+  const desig = (intern.designation || '').toLowerCase();
+  const keywords = INTERN_ROLE_KEYWORDS[roleName] || [roleName.toLowerCase().split(' ')[0]];
+  // If intern has no designation, show them under any role
+  if (!desig) return true;
+  return keywords.some(kw => desig.includes(kw));
+};
+
+const InternWizardModal = ({
+  step, setStep, requirements, setRequirements,
+  reqInput, setReqInput, availablePool,
+  selectedForIntern, setSelectedForIntern,
+  onClose, onSubmit,
+}) => {
+  const toggleSkill = (skill) => {
+    setReqInput(prev => ({
+      ...prev,
+      skills: prev.skills.includes(skill)
+        ? prev.skills.filter(s => s !== skill)
+        : [...prev.skills, skill],
+    }));
+  };
+
+  const addRequirement = () => {
+    if (!reqInput.role) return;
+    setRequirements(prev => [...prev, { ...reqInput, qty: parseInt(reqInput.qty) || 1 }]);
+    setReqInput({ role: '', qty: 1, skills: [], experience: '' });
+  };
+
+  const removeRequirement = (idx) => setRequirements(prev => prev.filter((_, i) => i !== idx));
+
+  const toggleSelect = (intern, roleName) => {
+    setSelectedForIntern(prev => {
+      if (prev[intern._id]) { const next = { ...prev }; delete next[intern._id]; return next; }
+      return { ...prev, [intern._id]: roleName };
+    });
+  };
+
+  const grouped = requirements.map(req => ({
+    req,
+    matches: availablePool.filter(intern => matchesInternRole(intern, req.role)),
+  }));
+
+  const totalSelected = Object.keys(selectedForIntern).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F172A]/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col h-[80vh] text-left">
+
+        <div className="px-6 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-3">
+            <GraduationCap size={20} className="text-[#7C3AED]" />
+            <div>
+              <h2 className="text-[15px] font-bold text-[#0F172A]">Assign Interns</h2>
+              <p className="text-[12px] text-[#64748B]">Step {step} of 2 — {step === 1 ? 'Define Requirements' : 'Select Interns'}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-[#64748B] hover:bg-[#E2E8F0] p-1 rounded-full">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        <div className="w-full h-1 bg-[#F1F5F9] shrink-0">
+          <div className="h-full bg-[#7C3AED] transition-all duration-300" style={{ width: `${(step / 2) * 100}%` }} />
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+          {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-[15px] font-bold text-[#0F172A] mb-1">Intern Requirements</h3>
+                <p className="text-[12px] text-[#64748B]">Define what intern roles you need. We'll show matching available interns.</p>
+              </div>
+
+              <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#0F172A] mb-1">Intern Role Needed</label>
+                    <select
+                      value={reqInput.role}
+                      onChange={e => setReqInput(p => ({ ...p, role: e.target.value }))}
+                      className="w-full p-2 bg-white border border-[#E2E8F0] rounded-lg text-[13px] outline-none focus:border-[#7C3AED] cursor-pointer"
+                    >
+                      <option value="">Select a role...</option>
+                      {INTERN_ROLE_OPTIONS.map(r => <option key={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#0F172A] mb-1">Quantity</label>
+                    <input
+                      type="number" min="1" max="20"
+                      value={reqInput.qty}
+                      onChange={e => setReqInput(p => ({ ...p, qty: e.target.value }))}
+                      className="w-full p-2 bg-white border border-[#E2E8F0] rounded-lg text-[13px] outline-none focus:border-[#7C3AED]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-[#0F172A] mb-2">Skills Required <span className="font-normal text-[#64748B]">(optional)</span></label>
+                  <div className="flex flex-wrap gap-2">
+                    {SKILL_OPTIONS.map(skill => (
+                      <button key={skill} onClick={() => toggleSkill(skill)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
+                          reqInput.skills.includes(skill)
+                            ? 'bg-[#7C3AED] text-white border-[#7C3AED]'
+                            : 'bg-white text-[#64748B] border-[#E2E8F0] hover:border-[#7C3AED] hover:text-[#7C3AED]'
+                        }`}>{skill}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-[#0F172A] mb-1">Internship Stage <span className="font-normal text-[#64748B]">(optional)</span></label>
+                  <div className="flex gap-2 flex-wrap">
+                    {['Any', 'Early Stage', 'Mid Stage', 'Final Stage'].map(stage => (
+                      <button key={stage}
+                        onClick={() => setReqInput(p => ({ ...p, experience: p.experience === stage ? '' : stage }))}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                          reqInput.experience === stage
+                            ? 'bg-[#0F172A] text-white border-[#0F172A]'
+                            : 'bg-white text-[#64748B] border-[#E2E8F0] hover:border-[#0F172A]'
+                        }`}>{stage}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <button onClick={addRequirement} disabled={!reqInput.role}
+                  className="w-full py-2 bg-[#0F172A] text-white rounded-lg text-[13px] font-bold hover:bg-[#334155] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  <Plus size={14} /> Add Requirement
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {requirements.map((req, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <GraduationCap size={18} className="text-[#7C3AED]" />
+                      <div>
+                        <p className="text-[13px] font-bold text-[#0F172A]">{req.role}</p>
+                        <p className="text-[11px] text-[#64748B]">
+                          Qty: {req.qty}{req.skills.length > 0 && ` · ${req.skills.join(', ')}`}{req.experience && ` · ${req.experience}`}
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => removeRequirement(idx)} className="text-[#EF4444] hover:bg-red-50 p-1 rounded-lg">
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                ))}
+                {requirements.length === 0 && (
+                  <div className="text-center py-8 text-[12px] text-[#94A3B8] border-2 border-dashed border-[#E2E8F0] rounded-xl">
+                    No requirements added yet. Add at least one above.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-[15px] font-bold text-[#0F172A] mb-1">Available Interns</h3>
+                <p className="text-[12px] text-[#64748B]">Only free interns matching your requirements are shown. Click <strong>+</strong> to select.</p>
+              </div>
+
+              {grouped.map(({ req, matches }, idx) => (
+                <div key={idx}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[12px] font-bold text-[#0F172A] uppercase tracking-wide">{req.role}</span>
+                    <span className="text-[11px] text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded-full">Need {req.qty}</span>
+                    <span className="text-[11px] text-[#16A34A] bg-[#DCFCE7] px-2 py-0.5 rounded-full">{matches.length} available</span>
+                  </div>
+                  {matches.length === 0 ? (
+                    <div className="text-[12px] text-[#94A3B8] italic py-3 px-4 border border-dashed border-[#E2E8F0] rounded-xl">
+                      No available interns match this role right now.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {matches.map(intern => {
+                        const isSelected = !!selectedForIntern[intern._id];
+                        const initial = intern.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                        return (
+                          <div key={intern._id} className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                            isSelected ? 'bg-[#F5F3FF] border-[#DDD6FE]' : 'bg-white border-[#E2E8F0] hover:border-[#C4B5FD]'
+                          }`}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-[12px] bg-[#F5F3FF] text-[#7C3AED] shrink-0">
+                                {initial}
+                              </div>
+                              <div>
+                                <p className="text-[13px] font-bold text-[#0F172A] leading-tight">{intern.name}</p>
+                                <p className="text-[11px] text-[#64748B]">
+                                  {intern.designation || 'Intern'}
+                                  {intern.college ? ` · ${intern.college}` : ''}
+                                  {intern.department?.name ? ` · ${intern.department.name}` : ''}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => toggleSelect(intern, req.role)}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+                                isSelected ? 'bg-[#EF4444] text-white' : 'bg-[#E2E8F0] text-[#475569] hover:bg-[#7C3AED] hover:text-white'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[15px]">{isSelected ? 'remove' : 'add'}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {grouped.length === 0 && (
+                <div className="text-center py-12 text-[#94A3B8] text-[13px]">No requirements defined.</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-between items-center shrink-0">
+          <button
+            onClick={() => step === 1 ? onClose() : setStep(1)}
+            className="px-4 py-2 text-[13px] font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg border border-[#E2E8F0] bg-white"
+          >
+            {step === 1 ? 'Cancel' : 'Back'}
+          </button>
+          {step === 1 ? (
+            <button
+              onClick={() => setStep(2)}
+              disabled={requirements.length === 0}
+              className="px-5 py-2 bg-[#7C3AED] text-white rounded-lg text-[13px] font-bold hover:bg-[#6D28D9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              Next — Select Interns <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          ) : (
+            <button
+              onClick={onSubmit}
+              disabled={totalSelected === 0}
+              className="px-5 py-2 bg-[#10B981] text-white rounded-lg text-[13px] font-bold hover:bg-[#059669] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[16px]">school</span>
+              Assign {totalSelected > 0 ? totalSelected : ''} Intern{totalSelected !== 1 ? 's' : ''} to Project
+            </button>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+};

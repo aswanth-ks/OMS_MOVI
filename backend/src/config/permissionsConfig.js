@@ -2,7 +2,7 @@ export const RESOURCES_CONFIG = [
   { resource: 'Users',      actions: ['create', 'read', 'update', 'delete'] },
   { resource: 'Departments', actions: ['create', 'read', 'update', 'delete'] },
   { resource: 'Roles',      actions: ['create', 'read', 'update', 'delete'] },
-  { resource: 'Projects',   actions: ['create', 'read', 'update', 'delete'] },
+  { resource: 'Projects',   actions: ['create', 'read', 'update', 'delete', 'manage'] },
   { resource: 'Tasks',      actions: ['create', 'read', 'update', 'delete'] },
   { resource: 'Attendance', actions: ['read', 'update', 'export'] },
   { resource: 'Leave',      actions: ['create', 'read', 'update', 'approve'] },

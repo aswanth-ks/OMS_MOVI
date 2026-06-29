@@ -377,7 +377,7 @@ export default function AdminUsers() {
                   <tr>
                     <td colSpan={9} className="px-4 py-12 text-center text-[#64748B] text-sm">
                       <span className="material-symbols-outlined text-[40px] text-[#CBD5E1] block mb-2">group</span>
-                      No users found.{searchQuery && ' Try clearing your search.'}
+                      {searchQuery ? 'No users found. Try clearing your search.' : 'No users found. Create the first user.'}
                     </td>
                   </tr>
                 ) : (

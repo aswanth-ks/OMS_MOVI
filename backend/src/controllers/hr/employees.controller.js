@@ -140,6 +140,41 @@ export const getEmployeeLeaves = async (req, res, next) => {
   }
 };
 
+export const addEmployeePerformance = async (req, res, next) => {
+  try {
+    const { week, rating, note } = req.body;
+    if (!week || !rating) return sendError(res, 'Week and rating are required', 400);
+
+    const employee = await User.findOne({ _id: req.params.id, ...req.scopeFilter });
+    if (!employee) return sendError(res, 'Employee not found', 404);
+
+    if (!employee.performanceRatings) employee.performanceRatings = [];
+    const existingIndex = employee.performanceRatings.findIndex(
+      r => r.week === Number(week) && r.addedBy?.toString() === req.user._id.toString()
+    );
+    if (existingIndex !== -1) {
+      employee.performanceRatings[existingIndex].rating = rating;
+      employee.performanceRatings[existingIndex].note   = note;
+      employee.performanceRatings[existingIndex].source = 'hr';
+    } else {
+      employee.performanceRatings.push({ week: Number(week), rating, note, source: 'hr', addedBy: req.user._id });
+    }
+    await employee.save({ validateBeforeSave: false });
+
+    const { sendNotification } = await import('../../utils/sendNotification.js');
+    await sendNotification({
+      recipient: employee._id,
+      type: 'system_alert',
+      title: 'Performance Review Added',
+      message: `Week ${week} performance review submitted by HR.`,
+      link: '/employee/profile',
+      sender: req.user._id,
+    });
+
+    sendSuccess(res, employee.performanceRatings, 'Performance rating saved');
+  } catch (error) { next(error); }
+};
+
 export const addEmployeeNote = async (req, res, next) => {
   try {
     const { note } = req.body;

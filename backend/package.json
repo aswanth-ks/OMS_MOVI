@@ -8,7 +8,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed": "node src/config/seed.js",
-    "seed:users": "node src/config/seedUsers.js"
+    "seed:users": "node src/config/seedUsers.js",
+    "demo:reset": "node src/config/resetForDemo.js"
   },
   "engines": {
     "node": ">=18.0.0"

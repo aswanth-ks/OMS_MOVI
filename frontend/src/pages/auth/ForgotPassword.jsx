@@ -1,21 +1,27 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { authAPI } from '../../utils/api';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || loading) return;
+    setError('');
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await authAPI.forgotPassword(email.trim());
       setSubmitted(true);
-    }, 1000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -50,6 +56,14 @@ export default function ForgotPassword() {
               <p className="text-sm text-[#64748B] text-center mb-6">
                 Enter the email address associated with your account and we'll send you a link to reset your password.
               </p>
+
+              {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-[13px] text-red-700">{error}</p>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-[#0F172A]">
                   Email address

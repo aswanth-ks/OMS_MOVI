@@ -81,21 +81,6 @@ export default function Header({ sidebarCollapsed }) {
       {/* Right side */}
       <div className="flex items-center gap-5">
         
-        {/* Search */}
-        <div className="hidden md:flex items-center relative w-64">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-          <input
-            className="w-full bg-slate-800 border border-slate-700 rounded text-slate-200 py-1.5 pl-9 pr-3 text-[13px] focus:outline-none focus:border-blue-500 focus:bg-slate-900 transition-colors placeholder:text-slate-500"
-            placeholder="Search..."
-            type="text"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && e.target.value) {
-                toast('Search coming soon', { icon: '🔍' });
-              }
-            }}
-          />
-        </div>
-
         {/* Notifications bell */}
         <div className="relative" ref={notifRef}>
           <button

@@ -263,10 +263,11 @@ export const addTaskAttachment = async (req, res, next) => {
       return sendError(res, 'Not authorized to add attachments to this task', 403);
     }
 
+    const sizeKB = req.file.size / 1024;
     const attachment = {
       name: req.file.originalname,
-      url: `/uploads/attachments/${req.file.filename}`,
-      size: req.file.size,
+      path: `/uploads/attachments/${req.file.filename}`,
+      size: sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${Math.round(sizeKB)} KB`,
       uploadedBy: req.user._id,
       uploadedAt: new Date(),
     };

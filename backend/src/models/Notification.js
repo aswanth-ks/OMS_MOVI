@@ -13,6 +13,7 @@ const NotificationSchema = new Schema({
     type: String,
     enum: [
       'task_assigned', 'task_approved', 'task_rejected',
+      'task_submitted_for_review', 'task_blocked', 'task_comment',
       'leave_approved', 'leave_rejected', 'leave_requested',
       'project_assigned', 'project_updated',
       'user_created', 'permission_changed',

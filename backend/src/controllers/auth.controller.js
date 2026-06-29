@@ -1,9 +1,11 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import User from '../models/User.js';
 import Settings from '../models/Settings.js';
 import AuditLog from '../models/AuditLog.js';
 import { generateTokenPair } from '../utils/generateToken.js';
 import { sendSuccess, sendError } from '../utils/apiResponse.js';
+import { sendPasswordResetEmail } from '../utils/sendEmail.js';
 
 /**
  * POST /api/auth/login
@@ -134,6 +136,7 @@ export const login = async (req, res, next) => {
       employmentType: user.employmentType,
       status: user.status,
       lastLogin: user.lastLogin,
+      mustChangePassword: user.mustChangePassword || false,
     };
 
     sendSuccess(res, { token, refreshToken, user: userResponse }, 'Login successful');
@@ -219,6 +222,125 @@ export const logout = async (req, res, next) => {
     });
 
     sendSuccess(res, null, 'Logged out successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/auth/forgot-password
+ * Accepts an email, generates a reset token, and emails a reset link.
+ * Always responds with success to avoid leaking which emails are registered.
+ */
+export const forgotPassword = async (req, res, next) => {
+  // Generic message used for every outcome — never reveal whether the email exists.
+  const genericMessage = 'If an account with that email exists, a password reset link has been sent.';
+
+  try {
+    const { email } = req.body;
+    if (!email) return sendError(res, 'Email is required', 400);
+
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      deletedAt: { $exists: false },
+    });
+
+    // No user, or an inactive account → respond success but do nothing.
+    if (!user || user.status !== 'Active') {
+      return sendSuccess(res, null, genericMessage);
+    }
+
+    // Generate + persist the hashed token
+    const rawToken = user.createPasswordResetToken();
+    await user.save({ validateBeforeSave: false });
+
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+    const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
+
+    try {
+      await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
+    } catch (emailErr) {
+      // Roll back the token so a failed send doesn't leave a dangling reset request
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+      console.error('Password reset email failed:', emailErr.message);
+      return sendError(res, 'Could not send the reset email. Please try again later.', 502);
+    }
+
+    await AuditLog.create({
+      user: user._id,
+      userName: user.name,
+      action: 'Update',
+      module: 'Auth',
+      result: 'SUCCESS',
+      details: `Password reset link requested for ${user.email}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    }).catch(() => {});
+
+    return sendSuccess(res, null, genericMessage);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/auth/reset-password
+ * Validates the reset token + sets a new password.
+ */
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword, confirmPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return sendError(res, 'Token and new password are required', 400);
+    }
+    if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+      return sendError(res, 'Passwords do not match', 400);
+    }
+
+    // Enforce minimum length from settings
+    const settings = await Settings.findOne({ key: 'global' });
+    const minLen = settings?.security?.minPasswordLength || 8;
+    if (newPassword.length < minLen) {
+      return sendError(res, `Password must be at least ${minLen} characters`, 400);
+    }
+
+    // Hash the incoming token and match against a non-expired record
+    const hashed = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      resetPasswordToken: hashed,
+      resetPasswordExpires: { $gt: new Date() },
+    }).select('+password +resetPasswordToken +resetPasswordExpires');
+
+    if (!user) {
+      return sendError(res, 'This reset link is invalid or has expired. Please request a new one.', 400);
+    }
+
+    // Apply the new password and clear all reset / lockout state
+    user.password = newPassword;
+    user.passwordChangedAt = new Date();
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.mustChangePassword = false;
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+    user.refreshToken = null; // invalidate existing sessions
+    await user.save();
+
+    await AuditLog.create({
+      user: user._id,
+      userName: user.name,
+      action: 'Update',
+      module: 'Auth',
+      result: 'SUCCESS',
+      details: `Password reset completed for ${user.email}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    }).catch(() => {});
+
+    return sendSuccess(res, null, 'Your password has been reset. You can now log in with your new password.');
   } catch (error) {
     next(error);
   }

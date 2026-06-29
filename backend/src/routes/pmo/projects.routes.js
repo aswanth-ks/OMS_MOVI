@@ -19,8 +19,8 @@ router.get('/:id', requirePermission('Projects', 'read'), getProjectById);
 router.put('/:id', requirePermission('Projects', 'update'), auditLog('Update', 'Projects'), updateProject);
 router.delete('/:id', requirePermission('Projects', 'delete'), auditLog('Delete', 'Projects'), deleteProject);
 
-router.post('/:id/team', requirePermission('Projects', 'manage'), auditLog('Update', 'Projects'), addTeamMembers);
-router.delete('/:id/team/:userId', requirePermission('Projects', 'manage'), auditLog('Update', 'Projects'), removeTeamMember);
+router.post('/:id/team', requirePermission('Projects', 'update'), auditLog('Update', 'Projects'), addTeamMembers);
+router.delete('/:id/team/:userId', requirePermission('Projects', 'update'), auditLog('Update', 'Projects'), removeTeamMember);
 router.post('/:id/interns', requirePermission('Interns', 'manage'), auditLog('Update', 'Projects'), assignInterns);
 
 router.post('/:id/milestones', requirePermission('Projects', 'update'), auditLog('Update', 'Projects'), addMilestone);

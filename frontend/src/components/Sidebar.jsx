@@ -38,6 +38,8 @@ const NAV_CONFIG = {
     { to: '/hr/interns', icon: 'school', label: 'Interns', permission: { resource: 'Interns', action: 'read' } },
     { to: '/hr/onboarding', icon: 'person_add', label: 'Onboarding', permission: { resource: 'Users', action: 'update' } },
     { to: '/hr/attendance', icon: 'event_available', label: 'Attendance', permission: { resource: 'Attendance', action: 'read' } },
+    { to: '/hr/leave', icon: 'event_note', label: 'Leave' },
+    { to: '/hr/projects', icon: 'folder_open', label: 'Projects' },
     { to: '/hr/performance', icon: 'grade', label: 'Performance' },
     { to: '/hr/tasks', icon: 'view_kanban', label: 'Task Board', permission: { resource: 'Tasks', action: 'read' } },
     { to: '/hr/tasks/new', icon: CheckSquare, label: 'Assign Task', isLucide: true, permission: { resource: 'Tasks', action: 'create' } },
@@ -185,30 +187,6 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           </div>
         )}
       </nav>
-
-      {/* Intern Progress Card (Bottom of Sidebar) */}
-      {isIntern && !collapsed && (
-        <div className="shrink-0 mb-6 mx-4">
-          <div className="bg-[#0F172A] rounded-xl p-4 shadow-sm border border-slate-700/50">
-            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Internship Status</h4>
-            <div className="flex justify-between items-end mb-1.5">
-              <span className="text-[13px] font-bold text-white">45 days</span>
-              <span className="text-[10px] text-slate-400">remaining</span>
-            </div>
-            <div className="w-full h-1.5 bg-[#1E293B] rounded-full overflow-hidden">
-              <div className="h-full bg-[#16A34A] rounded-full" style={{ width: '55%' }} />
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {isIntern && collapsed && (
-        <div className="shrink-0 mb-6 mx-auto">
-          <div className="w-10 h-10 rounded-full border-2 border-[#16A34A] flex items-center justify-center p-0.5">
-            <div className="w-full h-full rounded-full border-2 border-transparent border-t-[#1E293B] rotate-45" />
-          </div>
-        </div>
-      )}
 
     </aside>
   );

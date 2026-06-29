@@ -90,28 +90,61 @@ export const getTeam = async (req, res, next) => {
   }
 };
 
+export const getMemberById = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select('-password')
+      .populate('role', 'name slug')
+      .populate('department', 'name code')
+      .populate('manager', 'name employeeId designation')
+      .populate('hrManager', 'name employeeId');
+
+    if (!user) return sendError(res, 'User not found', 404);
+
+    sendSuccess(res, user);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getAvailableMembers = async (req, res, next) => {
   try {
-    const { projectId } = req.query;
+    const { type } = req.query; // 'hr' or 'employee'
 
-    const adminRoles = await Role.find({ slug: { $in: ['super-admin', 'admin'] } });
-    const adminRoleIds = adminRoles.map(r => r._id);
+    const excludeSlugs = ['super-admin', 'admin', 'pmo-lead'];
+    const hrSlugs = ['hr-manager', 'hr'];
+
+    const [excludedRoles, hrRoles] = await Promise.all([
+      Role.find({ slug: { $in: excludeSlugs } }),
+      Role.find({ slug: { $in: hrSlugs } }),
+    ]);
+    const excludedRoleIds = excludedRoles.map(r => r._id);
+    const hrRoleIds = hrRoles.map(r => r._id);
+
+    let roleFilter;
+    let employmentTypeFilter = {};
+
+    if (type === 'hr') {
+      roleFilter = { role: { $in: hrRoleIds } };
+    } else if (type === 'intern') {
+      roleFilter = { role: { $nin: excludedRoleIds } };
+      employmentTypeFilter = { employmentType: 'Intern' };
+    } else {
+      // type === 'employee': exclude admins, hr, and interns
+      roleFilter = { role: { $nin: [...excludedRoleIds, ...hrRoleIds] } };
+      employmentTypeFilter = { employmentType: { $ne: 'Intern' } };
+    }
 
     const filter = {
       status: 'Active',
-      role: { $nin: adminRoleIds },
+      $or: [{ project: { $exists: false } }, { project: null }],
+      ...roleFilter,
+      ...employmentTypeFilter,
     };
 
-    if (projectId) {
-      const project = await Project.findById(projectId);
-      if (project) {
-        const existingMembers = project.team.map(t => t.user.toString());
-        filter._id = { $nin: existingMembers };
-      }
-    }
-
     const availableUsers = await User.find(filter)
-      .select('name designation department avatar employmentType role')
+      .select('name designation department avatar employmentType role email')
+      .populate('role', 'name slug')
       .populate('department', 'name code');
 
     sendSuccess(res, availableUsers);

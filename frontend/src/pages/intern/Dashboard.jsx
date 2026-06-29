@@ -38,22 +38,31 @@ const CircularProgress = ({ percentage }) => {
 export default function InternDashboard() {
   const navigate = useNavigate();
 
-  const [profile, setProfile] = useState(null);
-  const [tasks, setTasks] = useState([]);
-  const [learning, setLearning] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [profile,     setProfile]     = useState(null);
+  const [tasks,       setTasks]       = useState([]);
+  const [learning,    setLearning]    = useState([]);
+  const [attendance,  setAttendance]  = useState(null);
+  const [leaveBalance, setLeaveBalance] = useState(null);
+  const [loading,     setLoading]     = useState(true);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const profileRes = await internAPI.getProfile();
-      setProfile(profileRes.data.data);
+      const now = new Date();
+      const [profileRes, tasksRes, learningRes, attendanceRes, leaveRes] = await Promise.all([
+        internAPI.getProfile(),
+        internAPI.getTasks(),
+        internAPI.getLearningResources(),
+        internAPI.getAttendance({ month: now.getMonth() + 1, year: now.getFullYear() }),
+        internAPI.getLeaveBalance(),
+      ]);
 
-      const tasksRes = await internAPI.getTasks();
-      setTasks(tasksRes.data.data || []);
-
-      const learningRes = await internAPI.getLearningResources();
-      setLearning(learningRes.data.data || []);
+      setProfile(profileRes.data?.data || profileRes.data);
+      setTasks(tasksRes.data?.data || []);
+      const lData = learningRes.data?.data;
+      setLearning(Array.isArray(lData) ? lData : (lData?.resources || []));
+      setAttendance(attendanceRes.data?.data || attendanceRes.data);
+      setLeaveBalance(leaveRes.data?.data || leaveRes.data);
     } catch (err) {
       toast.error('Failed to load dashboard data');
     } finally {
@@ -80,23 +89,28 @@ export default function InternDashboard() {
   const completedTasks = tasks.filter(t => t.status === 'Done').length;
   const overdueCount = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'Done').length;
 
-  // Calculate remaining leaves
-  const remainingLeaves = profile?.leaveBalance 
-    ? ((profile.leaveBalance.casual?.total || 0) + (profile.leaveBalance.sick?.total || 0)) -
-      ((profile.leaveBalance.casual?.used || 0) + (profile.leaveBalance.sick?.used || 0))
-    : 4;
+  // Attendance percentage from real data
+  const attendancePct = attendance?.summary?.attendancePercentage ?? attendance?.attendancePercentage ?? null;
 
-  // Calculate internship progress percent
-  let progressPercent = 50;
-  let daysRemaining = 45;
-  if (profile?.startDate && profile?.endDate) {
-    const start = new Date(profile.startDate);
-    const end = new Date(profile.endDate);
-    const now = new Date();
-    const total = end.getTime() - start.getTime();
+  // Remaining leaves from real balance
+  const remainingLeaves = leaveBalance
+    ? Object.values(leaveBalance).reduce((sum, b) => {
+        if (b && typeof b === 'object' && 'total' in b) return sum + (b.total - (b.used || 0));
+        return sum;
+      }, 0)
+    : null;
+
+  // Calculate internship progress percent (model uses internshipStart/internshipEnd)
+  let progressPercent = 0;
+  let daysRemaining = null;
+  if (profile?.internshipStart && profile?.internshipEnd) {
+    const start = new Date(profile.internshipStart);
+    const end   = new Date(profile.internshipEnd);
+    const now   = new Date();
+    const total   = end.getTime() - start.getTime();
     const elapsed = now.getTime() - start.getTime();
-    progressPercent = total > 0 ? Math.min(Math.round((elapsed / total) * 100), 100) : 50;
-    daysRemaining = Math.max(Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)), 0);
+    progressPercent = total > 0 ? Math.min(Math.round((elapsed / total) * 100), 100) : 0;
+    daysRemaining   = Math.max(Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)), 0);
   }
 
   // Todays tasks (active)
@@ -161,7 +175,9 @@ export default function InternDashboard() {
             </div>
             <div>
               <p className="text-sm font-bold text-[#0F172A]">Attendance</p>
-              <p className="text-xs text-[#64748B]">96% &middot; Active status</p>
+              <p className="text-xs text-[#64748B]">
+                {attendancePct !== null ? `${attendancePct}%` : '—'} &middot; This month
+              </p>
             </div>
           </div>
           <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm">
@@ -169,7 +185,9 @@ export default function InternDashboard() {
               <Clock size={20} />
             </div>
             <div>
-              <p className="text-sm font-bold text-[#0F172A]">{remainingLeaves} Leaves</p>
+              <p className="text-sm font-bold text-[#0F172A]">
+                {remainingLeaves !== null ? `${remainingLeaves} Leaves` : '— Leaves'}
+              </p>
               <p className="text-xs text-[#64748B]">Remaining balance</p>
             </div>
           </div>
@@ -269,13 +287,13 @@ export default function InternDashboard() {
               <p className="text-xs text-[#64748B] mt-2 mb-4">of internship complete</p>
               
               <div className="flex gap-4 w-full justify-center text-sm font-medium text-[#0F172A] mb-5">
-                <div><span className="text-[#64748B] text-xs block">Start</span>{profile?.startDate ? new Date(profile.startDate).toLocaleDateString(undefined, {month: 'short', day: '2-digit'}) : 'N/A'}</div>
+                <div><span className="text-[#64748B] text-xs block">Start</span>{profile?.internshipStart ? new Date(profile.internshipStart).toLocaleDateString(undefined, {month: 'short', day: '2-digit'}) : '—'}</div>
                 <div className="w-px bg-slate-200"></div>
-                <div><span className="text-[#64748B] text-xs block">End</span>{profile?.endDate ? new Date(profile.endDate).toLocaleDateString(undefined, {month: 'short', day: '2-digit'}) : 'N/A'}</div>
+                <div><span className="text-[#64748B] text-xs block">End</span>{profile?.internshipEnd ? new Date(profile.internshipEnd).toLocaleDateString(undefined, {month: 'short', day: '2-digit'}) : '—'}</div>
               </div>
-              
+
               <div className="bg-[#EFF6FF] text-[#2563EB] px-4 py-1.5 rounded-full text-sm font-bold inline-block">
-                {daysRemaining} days remaining
+                {daysRemaining !== null ? `${daysRemaining} days remaining` : 'No end date set'}
               </div>
             </div>
 
@@ -333,7 +351,9 @@ export default function InternDashboard() {
                 <span className="bg-amber-50 text-amber-700 text-xs font-bold px-2 py-0.5 rounded">{learning.filter(l => l.status !== 'Completed').length} pending</span>
               </div>
               <div className="space-y-3 mb-4">
-                {learning.slice(0, 2).map(lr => (
+                {learning.length === 0 ? (
+                  <p className="text-sm text-[#64748B] py-2">No learning resources assigned yet.</p>
+                ) : learning.slice(0, 2).map(lr => (
                   <div key={lr._id} className="flex gap-3 items-center border border-[#E2E8F0] p-2.5 rounded-lg text-left">
                     <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 bg-blue-100 text-blue-600">
                       <GraduationCap size={16} />

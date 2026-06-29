@@ -4,6 +4,7 @@ import User from '../../models/User.js';
 import { sendSuccess, sendError, sendPaginated } from '../../utils/apiResponse.js';
 import { getPagination } from '../../utils/paginate.js';
 import { sendNotification } from '../../utils/sendNotification.js';
+import { sendProjectAssignmentEmail } from '../../utils/sendEmail.js';
 
 export const getProjects = async (req, res, next) => {
   try {
@@ -57,43 +58,60 @@ export const getProjects = async (req, res, next) => {
 
 export const createProject = async (req, res, next) => {
   try {
-    const { name, description, department, priority, startDate, endDate, budget, tags, milestones } = req.body;
+    const { name, description, department, priority, startDate, endDate, budget, tags, milestones, hrRepId } = req.body;
 
     if (!name || !department) return sendError(res, 'Name and department are required', 400);
 
     const year = new Date().getFullYear();
-    const count = await Project.countDocuments({
-      code: new RegExp(`^PRJ-${year}`),
-    });
+    const count = await Project.countDocuments({ code: new RegExp(`^PRJ-${year}`) });
     const code = `PRJ-${year}-${String(count + 1).padStart(3, '0')}`;
 
+    // Build initial team with PMO Lead
+    const initialTeam = [{ user: req.user._id, role: 'PMO Lead', joinedAt: new Date() }];
+
+    // If HR rep selected, validate and add to initial team
+    let hrUser = null;
+    if (hrRepId) {
+      hrUser = await User.findById(hrRepId);
+      if (hrUser && hrUser.status === 'Active') {
+        initialTeam.push({ user: hrUser._id, role: 'HR Representative', joinedAt: new Date() });
+      }
+    }
+
     const project = await Project.create({
-      code,
-      name,
-      description,
-      department,
-      priority,
-      startDate,
-      endDate,
-      budget,
-      tags,
-      milestones,
-      manager: req.user._id, // PMO Lead creating it
+      code, name, description, department, priority,
+      startDate, endDate, budget, tags, milestones,
+      manager: req.user._id,
+      team: initialTeam,
     });
 
-    // Notify Department Head
-    const deptHead = await User.findOne({ department, role: { $exists: true } }) // simplified logic, typically would find role=dept-head
-      .populate('role');
-    
-    if (deptHead) {
+    // Lock HR rep to project and set reporting chain
+    if (hrUser) {
+      hrUser.project = project._id;
+      hrUser.manager = req.user._id;
+      await hrUser.save({ validateBeforeSave: false });
+
       await sendNotification({
-        recipient: deptHead._id,
-        type: 'system_alert',
-        title: 'New Project Created',
-        message: `New project ${name} created in your department by ${req.user.name}.`,
-        link: `/projects/${project._id}`,
+        recipient: hrUser._id,
+        type: 'project_assigned',
+        title: 'New Project Assignment',
+        message: `You've been assigned as HR Representative for ${name} by ${req.user.name}.`,
+        link: `/employee/projects/${project._id}`,
         sender: req.user._id,
       });
+
+      try {
+        await sendProjectAssignmentEmail({
+          to: hrUser.email,
+          employeeName: hrUser.name,
+          projectName: name,
+          projectCode: code,
+          role: 'HR Representative',
+          pmoName: req.user.name,
+          hrName: null,
+          loginUrl: process.env.APP_URL,
+        });
+      } catch (_) {}
     }
 
     sendSuccess(res, project, 'Project created successfully', 201);
@@ -199,30 +217,73 @@ export const addTeamMembers = async (req, res, next) => {
     const project = await Project.findOne({ _id: req.params.id, ...req.projectFilter });
     if (!project) return sendError(res, 'Project not found', 404);
 
+    // Identify the HR rep: first check incoming members list, then fall back to existing team
+    const hrMemberIncoming = members.find(m => m.role === 'HR Representative');
+    let hrRepId = hrMemberIncoming?.userId || null;
+
+    if (!hrRepId) {
+      // Look for an HR manager already on the project team
+      const existingTeamUsers = await User.find({
+        _id: { $in: project.team.map(t => t.user) },
+      }).populate('role', 'slug').select('_id role');
+      const existingHR = existingTeamUsers.find(u => u.role?.slug === 'hr-manager');
+      if (existingHR) hrRepId = existingHR._id.toString();
+    }
+
     for (const member of members) {
-      const user = await User.findById(member.userId);
+      const user = await User.findById(member.userId).populate('role', 'name slug');
       if (!user || user.status !== 'Active') continue;
 
-      const exists = project.team.find(t => t.user.toString() === member.userId);
-      if (!exists) {
-        project.team.push({ user: member.userId, role: member.role, joinedAt: new Date() });
+      // Reject if already assigned to another project
+      if (user.project && user.project.toString() !== project._id.toString()) {
+        continue;
+      }
 
-        await sendNotification({
-          recipient: member.userId,
-          type: 'project_assigned',
-          title: 'New Project Assignment',
-          message: `You've been added to ${project.name} as ${member.role} by ${req.user.name}.`,
-          link: `/employee/projects/${project._id}`,
-          sender: req.user._id,
+      const alreadyOnTeam = project.team.find(t => t.user.toString() === member.userId);
+      if (alreadyOnTeam) continue;
+
+      project.team.push({ user: member.userId, role: member.role, joinedAt: new Date() });
+
+      // Lock this user to the project and set reporting chain
+      user.project = project._id;
+      user.manager = req.user._id; // PMO Lead is reporting manager
+      // Assign HR manager: if the new member IS the HR rep, skip; otherwise link them
+      if (hrRepId && member.userId !== hrRepId) {
+        user.hrManager = hrRepId;
+      }
+      await user.save({ validateBeforeSave: false });
+
+      // In-app notification
+      await sendNotification({
+        recipient: member.userId,
+        type: 'project_assigned',
+        title: 'New Project Assignment',
+        message: `You've been added to ${project.name} as ${member.role} by ${req.user.name}.`,
+        link: `/employee/projects/${project._id}`,
+        sender: req.user._id,
+      });
+
+      // Email notification
+      try {
+        const hrUser = hrRepId ? await User.findById(hrRepId).select('name') : null;
+        await sendProjectAssignmentEmail({
+          to: user.email,
+          employeeName: user.name,
+          projectName: project.name,
+          projectCode: project.code,
+          role: member.role,
+          pmoName: req.user.name,
+          hrName: hrUser?.name || null,
+          loginUrl: process.env.APP_URL,
         });
+      } catch (_) {
+        // Email failure is non-fatal
       }
     }
 
     await project.save();
-    
-    // Repopulate team
     await project.populate('team.user', 'name designation avatar department');
-    
+
     sendSuccess(res, project.team, 'Team updated successfully');
   } catch (error) {
     next(error);
@@ -237,6 +298,11 @@ export const removeTeamMember = async (req, res, next) => {
 
     project.team = project.team.filter(t => t.user.toString() !== userId);
     await project.save();
+
+    // Free the user from their project lock and clear reporting chain set by this project
+    await User.findByIdAndUpdate(userId, {
+      $unset: { project: 1, manager: 1, hrManager: 1 },
+    });
 
     await sendNotification({
       recipient: userId,
@@ -259,6 +325,10 @@ export const assignInterns = async (req, res, next) => {
     const project = await Project.findOne({ _id: req.params.id, ...req.projectFilter });
     if (!project) return sendError(res, 'Project not found', 404);
 
+    // Find HR rep from project team
+    const hrTeamMember = project.team.find(t => t.role === 'HR Representative');
+    const hrRepId = hrTeamMember?.user || null;
+
     for (const internId of internIds) {
       const intern = await User.findOne({ _id: internId, employmentType: 'Intern' });
       if (!intern) continue;
@@ -267,6 +337,8 @@ export const assignInterns = async (req, res, next) => {
       if (!exists) {
         project.interns.push({ user: internId, joinedAt: new Date() });
         intern.project = project._id;
+        intern.manager = req.user._id; // PMO Lead is reporting manager
+        if (hrRepId) intern.hrManager = hrRepId; // Project HR rep
         await intern.save({ validateBeforeSave: false });
 
         await sendNotification({
@@ -371,8 +443,8 @@ export const deleteProject = async (req, res, next) => {
     // Delete all tasks under this project
     await Task.deleteMany({ project: project._id });
 
-    // Disassociate interns assigned to this project
-    await User.updateMany({ project: project._id }, { $unset: { project: 1 } });
+    // Free all users (employees + interns) locked to this project
+    await User.updateMany({ project: project._id }, { $unset: { project: 1, manager: 1, hrManager: 1 } });
 
     // Delete the project
     await Project.deleteOne({ _id: project._id });

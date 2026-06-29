@@ -16,7 +16,8 @@ export default function EmployeeDashboard() {
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [leaveBalance, setLeaveBalance] = useState(null);
+  const [leaveBalance,   setLeaveBalance]   = useState(null);
+  const [leaveRequests,  setLeaveRequests]  = useState([]);
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,22 +25,29 @@ export default function EmployeeDashboard() {
     setLoading(true);
     try {
       const profileRes = await employeeAPI.getProfile();
-      setProfile(profileRes.data.data);
+      // getProfile returns { user, projects, taskStats, leaveBalance, attendance }
+      const profileData = profileRes.data.data;
+      setProfile(profileData?.user || profileData);
+      if (profileData?.leaveBalance) setLeaveBalance(profileData.leaveBalance);
+      if (Array.isArray(profileData?.projects)) setProjects(profileData.projects);
 
       const tasksRes = await employeeAPI.getTasks();
       setTasks(tasksRes.data.data || []);
 
-      const projectsRes = await employeeAPI.getProjects();
-      setProjects(projectsRes.data.data || []);
-
       const attendanceRes = await employeeAPI.getAttendance();
-      setAttendance(attendanceRes.data.data || []);
+      // getAttendance returns { records, summary, month, year }
+      const attData = attendanceRes.data.data;
+      setAttendance(Array.isArray(attData) ? attData : (attData?.records || []));
 
       try {
-        const leaveRes = await employeeAPI.getLeaveBalance();
-        setLeaveBalance(leaveRes.data.data);
+        const [leaveBalRes, leaveReqRes] = await Promise.all([
+          employeeAPI.getLeaveBalance(),
+          employeeAPI.getLeaveRequests(),
+        ]);
+        setLeaveBalance(leaveBalRes.data.data);
+        setLeaveRequests(leaveReqRes.data?.data || []);
       } catch (leaveErr) {
-        console.warn('Could not load leave balance', leaveErr);
+        console.warn('Could not load leave data', leaveErr);
       }
 
       try {
@@ -340,6 +348,38 @@ export default function EmployeeDashboard() {
               </div>
             </div>
 
+            {/* Leave Status Card */}
+            <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="font-semibold text-[#0F172A]">Leave Status</h2>
+                <button onClick={() => navigate('/employee/leave')} className="text-sm font-bold text-[#2563EB] hover:underline">View All →</button>
+              </div>
+              {leaveRequests.length === 0 ? (
+                <p className="text-xs text-[#64748B]">No leave applications yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {leaveRequests.slice(0, 4).map(req => (
+                    <div key={req._id} className="flex items-center justify-between p-2.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC]">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-[#0F172A]">{req.type} Leave</p>
+                        <p className="text-[10px] text-[#64748B] mt-0.5">
+                          {req.fromDate ? new Date(req.fromDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          {' → '}
+                          {req.toDate ? new Date(req.toDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          {' · '}{req.days}d
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${
+                        req.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                        req.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>{req.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* My Team Card */}
             <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 shadow-sm">
               <div className="flex justify-between items-center mb-4">
@@ -361,7 +401,7 @@ export default function EmployeeDashboard() {
                       <div>
                         <p className="text-sm font-semibold text-[#0F172A]">{name}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-white border border-[#E2E8F0] text-[#64748B]">{member.role || member.user?.designation || 'Staff'}</span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-white border border-[#E2E8F0] text-[#64748B]">{member.roleInProject || member.role?.name || member.designation || 'Staff'}</span>
                         </div>
                       </div>
                     </div>

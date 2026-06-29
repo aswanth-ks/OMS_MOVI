@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getPendingLeaves, getLeaves, reviewLeave, allocateLeaveBalance,
+  getMyLeaveBalance, getMyLeaves, applyMyLeave, deleteMyLeave,
 } from '../../controllers/hr/leaves.controller.js';
 import { protect } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
@@ -9,6 +10,13 @@ import { auditLog } from '../../middleware/audit.js';
 
 const router = Router();
 router.use(protect);
+
+// HR's own leave — no hrScope (self-referential)
+router.get('/my/balance', getMyLeaveBalance);
+router.get('/my', getMyLeaves);
+router.post('/my/apply', applyMyLeave);
+router.delete('/my/:id', deleteMyLeave);
+
 router.use(hrScope);
 
 router.get('/pending', requirePermission('Leave', 'read'), getPendingLeaves);

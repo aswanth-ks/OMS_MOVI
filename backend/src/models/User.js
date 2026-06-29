@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const { Schema } = mongoose;
 
@@ -60,6 +61,7 @@ const UserSchema = new Schema({
     week: Number,
     rating: Number,
     note: String,
+    source: { type: String, enum: ['hr', 'pmo', 'admin'], default: 'hr' },
     addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
   }],
@@ -101,7 +103,10 @@ const UserSchema = new Schema({
   loginAttempts: { type: Number, default: 0 },
   lockUntil: Date,
   passwordChangedAt: Date,
+  mustChangePassword: { type: Boolean, default: false },
   refreshToken: { type: String, select: false },
+  resetPasswordToken: { type: String, select: false },
+  resetPasswordExpires: { type: Date, select: false },
 
   // Soft delete
   deletedAt: Date,
@@ -141,6 +146,15 @@ UserSchema.methods.comparePassword = async function (entered) {
 // ─── Method: is account locked ────────────────────────────────────────────────
 UserSchema.methods.isLocked = function () {
   return !!(this.lockUntil && this.lockUntil > Date.now());
+};
+
+// ─── Method: create password reset token ──────────────────────────────────────
+// Returns the raw token (emailed to the user); stores only the SHA-256 hash.
+UserSchema.methods.createPasswordResetToken = function () {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  this.resetPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+  this.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  return rawToken;
 };
 
 // ─── Static: generate employee ID ─────────────────────────────────────────────

@@ -1,15 +1,17 @@
 import { Router } from 'express';
 import {
-  getMyLeaves, getMyLeaveBalance, applyForLeave,
+  getMyLeaveBalance, getMyLeaves, applyForLeave, cancelLeave,
 } from '../../controllers/employee/leave.controller.js';
 import { protect } from '../../middleware/auth.js';
+import { employeeScope } from '../../middleware/employeeScope.js';
 import { auditLog } from '../../middleware/audit.js';
 
 const router = Router();
-router.use(protect);
+router.use(protect, employeeScope);
 
-router.get('/', getMyLeaves);
 router.get('/balance', getMyLeaveBalance);
-router.post('/', auditLog('Create', 'Leave'), applyForLeave);
+router.get('/requests', getMyLeaves);
+router.post('/apply', auditLog('Create', 'Leave'), applyForLeave);
+router.delete('/:id', cancelLeave);
 
 export default router;

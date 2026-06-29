@@ -1,6 +1,7 @@
 import LeaveRequest from '../../models/LeaveRequest.js';
 import LeaveBalance from '../../models/LeaveBalance.js';
 import User from '../../models/User.js';
+import Project from '../../models/Project.js';
 import Attendance from '../../models/Attendance.js';
 import { sendSuccess, sendError, sendPaginated } from '../../utils/apiResponse.js';
 import { getPagination } from '../../utils/paginate.js';
@@ -57,7 +58,7 @@ export const getLeaves = async (req, res, next) => {
 
     const [leaves, total] = await Promise.all([
       LeaveRequest.find(filter)
-        .populate('user', 'name employeeId department avatar')
+        .populate({ path: 'user', select: 'name employeeId department avatar role', populate: { path: 'role', select: 'slug name' } })
         .populate('reviewedBy', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -119,6 +120,7 @@ export const reviewLeave = async (req, res, next) => {
 
       // Deduct balance
       balance[typeKey].used += workingDays;
+      balance.markModified(typeKey);
       await balance.save();
 
       // Create attendance records
@@ -177,6 +179,94 @@ export const reviewLeave = async (req, res, next) => {
     await leave.save();
     
     sendSuccess(res, leave, `Leave request ${status.toLowerCase()} successfully`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── HR self-leave endpoints ──────────────────────────────────────────────────
+
+export const getMyLeaveBalance = async (req, res, next) => {
+  try {
+    const year = new Date().getFullYear();
+    let balance = await LeaveBalance.findOne({ user: req.user._id, year });
+    if (!balance) {
+      balance = await LeaveBalance.create({ user: req.user._id, year });
+    }
+    sendSuccess(res, balance);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyLeaves = async (req, res, next) => {
+  try {
+    const leaves = await LeaveRequest.find({ user: req.user._id })
+      .populate('reviewedBy', 'name')
+      .sort({ createdAt: -1 });
+    sendSuccess(res, leaves);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const applyMyLeave = async (req, res, next) => {
+  try {
+    const { type, fromDate, toDate, reason, projectImpact } = req.body;
+    if (!type || !fromDate || !toDate || !reason) {
+      return sendError(res, 'type, fromDate, toDate, and reason are required', 400);
+    }
+
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+    if (to < from) return sendError(res, 'toDate must be after fromDate', 400);
+
+    const days = getWorkingDays(from, to);
+    if (days === 0) return sendError(res, 'Selected dates contain no working days', 400);
+
+    const leave = await LeaveRequest.create({
+      user: req.user._id,
+      type,
+      fromDate: from,
+      toDate: to,
+      days,
+      reason,
+      projectImpact: projectImpact || '',
+    });
+
+    // Notify PMO leads dynamically — managers of projects this HR is assigned to
+    const projects = await Project.find({
+      $or: [{ 'team.user': req.user._id }, { manager: req.user._id }],
+    }).select('manager').lean();
+
+    const pmoManagerIds = [...new Set(
+      projects.map(p => p.manager?.toString()).filter(Boolean)
+    )].filter(id => id !== req.user._id.toString()); // don't notify self
+
+    await Promise.all(pmoManagerIds.map(managerId =>
+      sendNotification({
+        recipient: managerId,
+        type: 'system_alert',
+        title: 'HR Leave Request',
+        message: `${req.user.name} (HR Manager) has applied for ${type} leave from ${from.toDateString()} to ${to.toDateString()} (${days} day${days > 1 ? 's' : ''}). Pending your approval.`,
+        link: '/pmo/approvals',
+        sender: req.user._id,
+      })
+    ));
+
+    sendSuccess(res, leave, 'Leave application submitted successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteMyLeave = async (req, res, next) => {
+  try {
+    const leave = await LeaveRequest.findOne({ _id: req.params.id, user: req.user._id });
+    if (!leave) return sendError(res, 'Leave request not found', 404);
+    if (leave.status !== 'Pending') return sendError(res, 'Only pending leave requests can be deleted', 400);
+    await leave.deleteOne();
+    sendSuccess(res, null, 'Leave request deleted');
   } catch (error) {
     next(error);
   }

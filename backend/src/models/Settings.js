@@ -51,6 +51,22 @@ const SettingsSchema = new Schema({
     smtpEncryption: { type: String, enum: ['none', 'TLS', 'SSL'], default: 'TLS' },
     fromEmail:      { type: String, default: 'noreply@movicloudlabs.com' },
     fromName:       { type: String, default: 'OWMS Notifications' },
+
+    // Sender identities — one SMTP connection, three visible senders.
+    // Empty fields fall back to the default From above (fromName / fromEmail).
+    // Onboarding — welcome emails for new users
+    onboardingFromName:  { type: String, default: 'OWMS Onboarding' },
+    onboardingFromEmail: { type: String, default: '' },
+    onboardingReplyTo:   { type: String, default: '' },
+    // Alerts — project assignments, task notifications, system alerts
+    alertsFromName:      { type: String, default: 'OWMS Alerts' },
+    alertsFromEmail:     { type: String, default: '' },
+    alertsReplyTo:       { type: String, default: '' },
+    // Support — password reset & helpline (Reply-To should be a monitored inbox)
+    supportFromName:     { type: String, default: 'OWMS Support' },
+    supportFromEmail:    { type: String, default: '' },
+    supportReplyTo:      { type: String, default: '' },
+
     notifyNewUser:          { type: Boolean, default: true },
     notifyUserDeactivated:  { type: Boolean, default: true },
     notifyFailedLogin:      { type: Boolean, default: true },
@@ -71,6 +87,10 @@ const SettingsSchema = new Schema({
     maintenanceMessage: { type: String, default: 'System is under maintenance. Please check back soon.' },
     apiEnabled:         { type: Boolean, default: true },
     apiRateLimit:       { type: Number, min: 10, max: 1000, default: 100 },
+  },
+
+  hr: {
+    onboardingHRCap: { type: Number, min: 1, max: 50, default: 10 },
   },
 
 }, { timestamps: true });

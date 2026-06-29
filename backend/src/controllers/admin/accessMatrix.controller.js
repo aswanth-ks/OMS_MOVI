@@ -1,5 +1,6 @@
 import Role from '../../models/Role.js';
 import Permission from '../../models/Permission.js';
+import AuditLog from '../../models/AuditLog.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 
 /**
@@ -54,6 +55,13 @@ export const updateAccessMatrix = async (req, res, next) => {
       await role.save();
       modifiedCount++;
     }
+
+    await AuditLog.create({
+      user: req.user._id, userName: req.user.name,
+      action: 'Update', module: 'Access Matrix',
+      details: `Access matrix updated. ${modifiedCount} roles modified.`,
+      ipAddress: req.ip, userAgent: req.headers['user-agent'], result: 'SUCCESS',
+    }).catch(() => {});
 
     sendSuccess(res, null, `Access matrix updated successfully. ${modifiedCount} roles modified.`);
   } catch (error) {

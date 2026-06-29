@@ -1,40 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, UploadCloud, FileText, Play, ExternalLink, GraduationCap, 
-  CalendarDays, CheckCircle, Clock
+import {
+  X, UploadCloud, FileText, Play, ExternalLink, GraduationCap,
+  CalendarDays, CheckCircle, Clock, Trash2,
 } from 'lucide-react';
 import { hrAPI } from '../../utils/api';
+import toast from 'react-hot-toast';
 
 // --- SUB-COMPONENTS ---
-const AssignMaterialModal = ({ isOpen, onClose, internName, onAssign }) => {
+const AssignMaterialModal = ({ isOpen, onClose, internName, onAssign, saving }) => {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('Document');
+  const [url, setUrl] = useState('');
   const [deadline, setDeadline] = useState('');
   const [description, setDescription] = useState('');
-  
+  const [estimatedMinutes, setEstimatedMinutes] = useState('');
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!title || !deadline) return;
-    
-    onAssign({
-      _id: `mat-${Date.now()}`,
-      title,
-      type,
-      deadline,
-      description,
-      status: 'Pending',
-      assignedAt: new Date().toISOString()
-    });
-    
-    // Reset
-    setTitle('');
-    setType('Document');
-    setDeadline('');
-    setDescription('');
-    onClose();
+    if (!title) return;
+    onAssign({ title, type, url, dueDate: deadline || undefined, description, estimatedMinutes: Number(estimatedMinutes) || 0 });
+    setTitle(''); setType('Document'); setUrl(''); setDeadline(''); setDescription(''); setEstimatedMinutes('');
   };
 
   if (!isOpen) return null;
@@ -85,30 +73,40 @@ const AssignMaterialModal = ({ isOpen, onClose, internName, onAssign }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Deadline *</label>
-                <input 
-                  type="date" required value={deadline} onChange={e=>setDeadline(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
+                <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Resource URL <span className="text-[#64748B] font-normal">(Optional)</span></label>
+                <input
+                  type="url" value={url} onChange={e => setUrl(e.target.value)}
+                  placeholder="https://..."
                   className="w-full p-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:border-[#2563EB] text-sm"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Instructions / Description</label>
-                <textarea 
-                  value={description} onChange={e=>setDescription(e.target.value)}
-                  placeholder="Add any specific instructions for the intern..."
-                  className="w-full p-3 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#2563EB] resize-none h-24"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Deadline <span className="text-[#64748B] font-normal">(Optional)</span></label>
+                  <input
+                    type="date" value={deadline} onChange={e => setDeadline(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full p-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:border-[#2563EB] text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Est. Minutes <span className="text-[#64748B] font-normal">(Optional)</span></label>
+                  <input
+                    type="number" min="0" value={estimatedMinutes} onChange={e => setEstimatedMinutes(e.target.value)}
+                    placeholder="e.g. 60"
+                    className="w-full p-2.5 border border-[#E2E8F0] rounded-lg focus:outline-none focus:border-[#2563EB] text-sm"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Upload File / Images <span className="text-[#64748B] font-normal">(Optional)</span></label>
-                <button type="button" className="w-full border-2 border-dashed border-[#E2E8F0] rounded-xl p-6 text-center hover:border-[#2563EB] hover:bg-[#EFF6FF] transition-colors group">
-                  <UploadCloud size={24} className="mx-auto text-[#94A3B8] group-hover:text-[#2563EB] mb-2" />
-                  <p className="text-sm font-bold text-[#0F172A]">Click to upload or drag and drop</p>
-                  <p className="text-xs text-[#64748B] mt-1">PDF, JPG, PNG, MP4 &middot; Max 50MB</p>
-                </button>
+                <label className="block text-sm font-semibold text-[#0F172A] mb-1.5">Instructions / Description</label>
+                <textarea
+                  value={description} onChange={e => setDescription(e.target.value)}
+                  placeholder="Add any specific instructions for the intern..."
+                  className="w-full p-3 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#2563EB] resize-none h-24"
+                />
               </div>
 
             </form>
@@ -118,8 +116,9 @@ const AssignMaterialModal = ({ isOpen, onClose, internName, onAssign }) => {
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-[#64748B] hover:bg-[#E2E8F0] rounded-lg transition-colors">
               Cancel
             </button>
-            <button type="submit" form="assign-material-form" className="px-5 py-2 text-sm font-bold bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 transition-colors">
-              Assign Material
+            <button type="submit" form="assign-material-form" disabled={saving}
+              className="px-5 py-2 text-sm font-bold bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+              {saving ? 'Assigning…' : 'Assign Material'}
             </button>
           </div>
         </motion.div>
@@ -195,14 +194,49 @@ export default function HRInternDetails() {
     { id: 5, action: 'Onboarding completed successfully', time: 'Jan 12, 2024', icon: 'verified', color: 'text-indigo-500', bg: 'bg-indigo-50' },
   ];
 
-  const [learningMaterials, setLearningMaterials] = useState([
-    { _id: "m1", title: "OWMS Internal Guidelines", type: "Document", deadline: "2024-02-01", status: "Completed", assignedAt: "2024-01-11T10:00:00Z" },
-    { _id: "m2", title: "React Performance Optimization", type: "Video", deadline: "2024-03-15", status: "Completed", assignedAt: "2024-02-20T10:00:00Z" },
-    { _id: "m3", title: "Advanced MongoDB Aggregations", type: "Course", deadline: "2024-05-30", status: "In Progress", assignedAt: "2024-04-10T10:00:00Z" },
-  ]);
+  const [learningData, setLearningData]     = useState({ resources: [], progress: 0, total: 0, completed: 0 });
+  const [learningLoading, setLearningLoading] = useState(false);
+  const [assignSaving, setAssignSaving]     = useState(false);
+  const [deletingId, setDeletingId]         = useState(null);
 
-  const handleAssignMaterial = (newMaterial) => {
-    setLearningMaterials([newMaterial, ...learningMaterials]);
+  const loadLearning = async () => {
+    setLearningLoading(true);
+    try {
+      const r = await hrAPI.getInternLearning(id);
+      const d = r.data?.data || r.data;
+      setLearningData({
+        resources: d?.resources ?? [],
+        progress:  d?.progress  ?? 0,
+        total:     d?.total     ?? 0,
+        completed: d?.completed ?? 0,
+      });
+    } catch { toast.error('Failed to load learning materials'); }
+    finally { setLearningLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'learning') loadLearning();
+  }, [activeTab, id]);
+
+  const handleAssignMaterial = async (data) => {
+    setAssignSaving(true);
+    try {
+      await hrAPI.assignInternLearning(id, data);
+      toast.success('Material assigned');
+      setIsAssignModalOpen(false);
+      loadLearning();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to assign'); }
+    finally { setAssignSaving(false); }
+  };
+
+  const handleDeleteMaterial = async (resourceId) => {
+    setDeletingId(resourceId);
+    try {
+      await hrAPI.deleteInternLearning(id, resourceId);
+      toast.success('Material removed');
+      loadLearning();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to remove'); }
+    finally { setDeletingId(null); }
   };
 
   const getIconForType = (type) => {
@@ -488,9 +522,11 @@ export default function HRInternDetails() {
               <div className="flex justify-between items-center bg-white border border-[#E2E8F0] p-6 rounded-xl shadow-sm">
                 <div>
                   <h2 className="text-lg font-bold text-[#0F172A]">Assigned Learning Materials</h2>
-                  <p className="text-sm text-[#64748B] mt-1">Manage and track learning resources assigned to {emp.name.split(' ')[0]}.</p>
+                  <p className="text-sm text-[#64748B] mt-1">
+                    {learningData.completed}/{learningData.total} completed &middot; {learningData.progress}% progress
+                  </p>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsAssignModalOpen(true)}
                   className="bg-[#2563EB] hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
                 >
@@ -499,51 +535,69 @@ export default function HRInternDetails() {
               </div>
 
               <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                        <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Material</th>
-                        <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Assigned</th>
-                        <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Deadline</th>
-                        <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {learningMaterials.length === 0 && (
-                        <tr><td colSpan="4" className="px-6 py-8 text-center text-sm text-[#64748B]">No materials assigned yet.</td></tr>
-                      )}
-                      {learningMaterials.map(mat => (
-                        <tr key={mat._id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${getBgForType(mat.type)}`}>
-                                {getIconForType(mat.type)}
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-[#0F172A]">{mat.title}</p>
-                                <p className="text-xs text-[#64748B] mt-0.5">{mat.type}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-[#0F172A]">{formatDate(mat.assignedAt)}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-1.5 text-sm font-medium text-[#0F172A]">
-                              <CalendarDays size={14} className="text-[#64748B]" /> {formatDate(mat.deadline)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            {mat.status === 'Completed' && <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-green-100 text-green-700 px-2.5 py-1 rounded"><CheckCircle size={12} /> Completed</span>}
-                            {mat.status === 'In Progress' && <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2.5 py-1 rounded"><Clock size={12} /> In Progress</span>}
-                            {mat.status === 'Pending' && <span className="inline-flex items-center text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-2.5 py-1 rounded">Pending</span>}
-                          </td>
+                {learningLoading ? (
+                  <div className="flex justify-center py-12">
+                    <span className="material-symbols-outlined text-[28px] text-[#2563EB] animate-spin">sync</span>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                          <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Material</th>
+                          <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Assigned</th>
+                          <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Deadline</th>
+                          <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase">Status</th>
+                          <th className="px-6 py-3 text-xs font-bold tracking-wider text-[#64748B] uppercase"></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {learningData.resources.length === 0 && (
+                          <tr><td colSpan="5" className="px-6 py-8 text-center text-sm text-[#64748B]">No materials assigned yet.</td></tr>
+                        )}
+                        {learningData.resources.map(mat => (
+                          <tr key={mat._id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${getBgForType(mat.type)}`}>
+                                  {getIconForType(mat.type)}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-[#0F172A]">{mat.title}</p>
+                                  <p className="text-xs text-[#64748B] mt-0.5">{mat.type}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-medium text-[#0F172A]">{formatDate(mat.createdAt)}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-1.5 text-sm font-medium text-[#0F172A]">
+                                <CalendarDays size={14} className="text-[#64748B]" />
+                                {mat.dueDate ? formatDate(mat.dueDate) : '—'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {mat.status === 'Completed'   && <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-green-100 text-green-700 px-2.5 py-1 rounded"><CheckCircle size={12} /> Completed</span>}
+                              {mat.status === 'In Progress' && <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2.5 py-1 rounded"><Clock size={12} /> In Progress</span>}
+                              {mat.status === 'Pending'     && <span className="inline-flex items-center text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-2.5 py-1 rounded">Pending</span>}
+                            </td>
+                            <td className="px-6 py-4">
+                              <button
+                                disabled={deletingId === mat._id}
+                                onClick={() => handleDeleteMaterial(mat._id)}
+                                className="text-[#64748B] hover:text-red-600 disabled:opacity-40 transition-colors"
+                                title="Remove material"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -552,11 +606,12 @@ export default function HRInternDetails() {
 
       </div>
 
-      <AssignMaterialModal 
+      <AssignMaterialModal
         isOpen={isAssignModalOpen}
         onClose={() => setIsAssignModalOpen(false)}
         internName={emp.name}
         onAssign={handleAssignMaterial}
+        saving={assignSaving}
       />
     </PageWrapper>
   );
