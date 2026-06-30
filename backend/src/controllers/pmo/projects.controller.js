@@ -125,10 +125,15 @@ export const getProjectById = async (req, res, next) => {
     const project = await Project.findOne({ _id: req.params.id, ...req.projectFilter })
       .populate('manager', 'name avatar designation')
       .populate('department', 'name code')
-      .populate('team.user', 'name designation department avatar')
-      .populate('interns.user', 'name college avatar');
+      .populate({ path: 'team.user', select: 'name designation department avatar', match: { deletedAt: { $exists: false } } })
+      .populate({ path: 'interns.user', select: 'name college avatar', match: { deletedAt: { $exists: false } } });
 
     if (!project) return sendError(res, 'Project not found', 404);
+
+    // Drop roster entries whose user was soft-deleted (defense in depth — the
+    // startup scrub removes these, but never surface a ghost member regardless).
+    project.team = project.team.filter((t) => t.user);
+    project.interns = project.interns.filter((i) => i.user);
 
     const tasks = await Task.find({ project: project._id });
     const now = new Date();

@@ -12,8 +12,15 @@ const calcTenure = (from, to = null) => {
   if (!from) return null;
   const start = new Date(from).getTime();
   const end   = to ? new Date(to).getTime() : Date.now();
-  const days   = Math.floor((end - start) / 86400000);
-  if (days < 1)  return 'Today';
+  const diffMs = Math.max(0, end - start);
+  const days   = Math.floor(diffMs / 86400000);
+  if (days < 1) {
+    const hours = Math.floor(diffMs / 3600000);
+    if (hours >= 1) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes >= 1) return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    return 'Just now';
+  }
   if (days < 30) return `${days} day${days !== 1 ? 's' : ''}`;
   const months = Math.floor(days / 30.44);
   if (months < 12) return `${months} month${months !== 1 ? 's' : ''}`;

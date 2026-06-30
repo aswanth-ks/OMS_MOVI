@@ -15,6 +15,7 @@ export const getInterns = async (req, res, next) => {
     const filter = {
       ...req.scopeFilter,
       employmentType: 'Intern',
+      deletedAt: { $exists: false },
     };
 
     if (search) {

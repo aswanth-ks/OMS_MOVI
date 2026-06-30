@@ -10,6 +10,7 @@ export const getTeam = async (req, res, next) => {
       .populate({
         path: 'team.user',
         select: 'name designation avatar department employmentType',
+        match: { deletedAt: { $exists: false } },
         populate: {
           path: 'department',
           select: 'name code'
@@ -18,6 +19,7 @@ export const getTeam = async (req, res, next) => {
       .populate({
         path: 'interns.user',
         select: 'name designation avatar department employmentType',
+        match: { deletedAt: { $exists: false } },
         populate: {
           path: 'department',
           select: 'name code'

@@ -4,6 +4,7 @@ import connectDB from './src/config/db.js';
 import { validateEnv } from './src/config/env.js';
 import { syncPermissions } from './src/utils/syncPermissions.js';
 import { scheduleLeaveCleanup } from './src/utils/cleanupLeaves.js';
+import { scrubDeletedUserRefs } from './src/utils/scrubDeletedUsers.js';
 
 // Validate environment variables before anything else
 validateEnv();
@@ -11,6 +12,7 @@ validateEnv();
 // Connect to MongoDB then sync permissions from config
 await connectDB();
 await syncPermissions();
+await scrubDeletedUserRefs(); // heal any stale references to soft-deleted users
 scheduleLeaveCleanup();
 
 // Start server

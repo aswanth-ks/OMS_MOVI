@@ -46,14 +46,25 @@ export const getPendingLeaves = async (req, res, next) => {
 
 export const getPendingOnboarding = async (req, res, next) => {
   try {
-    // Show recently created users (employees) with incomplete onboarding across PMO's projects
-    const projects = await Project.find({ ...req.projectFilter }).select('team');
+    // Show recently added employees/interns with incomplete onboarding across PMO's
+    // projects. Staff roles (admin/HR/PMO) are never "onboarded" by the PMO, so
+    // exclude them even when they sit on a project team (e.g. as HR Representative).
+    const projects = await Project.find({ ...req.projectFilter }).select('team interns');
     const memberIds = new Set();
-    projects.forEach(p => p.team.forEach(t => memberIds.add(t.user.toString())));
+    projects.forEach(p => {
+      p.team.forEach(t => t.user && memberIds.add(t.user.toString()));
+      p.interns.forEach(i => i.user && memberIds.add(i.user.toString()));
+    });
+
+    const staffRoles = await Role.find({
+      slug: { $in: ['super-admin', 'admin', 'hr-manager', 'pmo-lead'] },
+    }).select('_id');
+    const staffRoleIds = staffRoles.map(r => r._id);
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const pendingUsers = await User.find({
       _id: { $in: Array.from(memberIds) },
+      role: { $nin: staffRoleIds },
       status: 'Active',
       onboardingComplete: { $ne: true },
       createdAt: { $gte: thirtyDaysAgo },

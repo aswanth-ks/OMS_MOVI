@@ -10,8 +10,8 @@ export const getMyProjects = async (req, res, next) => {
     })
       .populate('manager', 'name designation avatar')
       .populate('department', 'name code')
-      .populate('team.user', 'name designation avatar employmentType')
-      .populate('interns.user', 'name college avatar')
+      .populate({ path: 'team.user', select: 'name designation avatar employmentType', match: { deletedAt: { $exists: false } } })
+      .populate({ path: 'interns.user', select: 'name college avatar', match: { deletedAt: { $exists: false } } })
       .sort({ createdAt: -1 });
 
     const result = await Promise.all(projects.map(async (project) => {
@@ -25,6 +25,8 @@ export const getMyProjects = async (req, res, next) => {
       const completion = total > 0 ? Math.round((done / total) * 100) : 0;
 
       const obj = project.toJSON();
+      obj.team = (obj.team || []).filter((t) => t.user);
+      obj.interns = (obj.interns || []).filter((i) => i.user);
       obj.taskStats = { total, done, inProg, blocked, inReview, overdue, completion };
       return obj;
     }));
@@ -44,10 +46,13 @@ export const getProjectById = async (req, res, next) => {
     })
       .populate('manager', 'name designation avatar')
       .populate('department', 'name code')
-      .populate('team.user', 'name designation avatar employmentType')
-      .populate('interns.user', 'name college avatar performanceRatings');
+      .populate({ path: 'team.user', select: 'name designation avatar employmentType', match: { deletedAt: { $exists: false } } })
+      .populate({ path: 'interns.user', select: 'name college avatar performanceRatings', match: { deletedAt: { $exists: false } } });
 
     if (!project) return sendError(res, 'Project not found or you are not a member', 404);
+
+    project.team = project.team.filter((t) => t.user);
+    project.interns = project.interns.filter((i) => i.user);
 
     const tasks = await Task.find({ project: project._id })
       .populate('assignedTo', 'name employmentType')

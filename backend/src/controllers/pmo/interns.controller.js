@@ -7,7 +7,11 @@ import { sendNotification } from '../../utils/sendNotification.js';
 export const getInterns = async (req, res, next) => {
   try {
     const projects = await Project.find({ ...req.projectFilter })
-      .populate('interns.user', 'name college avatar department email internshipStart internshipEnd performanceRatings');
+      .populate({
+        path: 'interns.user',
+        select: 'name college avatar department email internshipStart internshipEnd performanceRatings',
+        match: { deletedAt: { $exists: false } },
+      });
       
     const internsSet = new Map();
     

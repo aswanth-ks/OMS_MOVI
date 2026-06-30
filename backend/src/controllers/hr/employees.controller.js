@@ -13,7 +13,10 @@ export const getEmployees = async (req, res, next) => {
     const { search, department, employmentType, status, sortBy, sortOrder } = req.query;
 
     const filter = { ...req.scopeFilter };
-    
+
+    // Never show soft-deleted users
+    filter.deletedAt = { $exists: false };
+
     // Exclude interns
     filter.employmentType = { $ne: 'Intern' };
     
