@@ -17,6 +17,7 @@ const UserSchema = new Schema({
     // Auto-generated: EMP-YYYY-XXX or INT-YYYY-XXX
   },
   name: { type: String, required: true, trim: true },
+  username: { type: String, unique: true, sparse: true, trim: true },
   email: {
     type: String,
     required: true,
@@ -31,6 +32,9 @@ const UserSchema = new Schema({
     select: false, // Never returned in queries by default
   },
   avatar: { type: String, default: null }, // file path
+  profileImage: { type: String, default: null }, // data URL / external image set via self-service profile
+  githubLink: { type: String, default: '' },
+  projectLink: { type: String, default: '' },
   role: {
     type: Schema.Types.ObjectId,
     ref: 'Role',

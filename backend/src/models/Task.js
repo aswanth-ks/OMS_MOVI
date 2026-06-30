@@ -12,7 +12,10 @@ const TaskSchema = new Schema({
   description: String,
   project: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
   assignedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  assignedTo: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  // Optional: becomes null when the assignee is offboarded/deleted (see needsReassignment).
+  assignedTo: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  // Set when the assignee was removed (e.g. user deleted) and the task needs a new owner.
+  needsReassignment: { type: Boolean, default: false },
   priority: {
     type: String,
     enum: ['Critical', 'High', 'Medium', 'Low'],

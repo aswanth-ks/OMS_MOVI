@@ -154,7 +154,7 @@ export const updateTaskStatus = async (req, res, next) => {
         type: 'system_alert',
         title: 'Task Unblocked',
         message: `${req.user.name} unblocked task "${task.title}"`,
-        link: `/pmo/tasks/${task._id}`,
+        link: '/pmo/tasks',
         sender: req.user._id,
       });
     }
@@ -190,7 +190,7 @@ export const addTaskComment = async (req, res, next) => {
       type: 'task_comment',
       title: 'New Comment on Task',
       message: `${req.user.name} commented on "${task.title}": "${truncated}"`,
-      link: `/employee/tasks/${task._id}`,
+      link: '/employee/tasks',
       sender: req.user._id,
     });
 

@@ -97,6 +97,14 @@ export const announcementsAPI = {
   create: (data) => api.post('/api/announcements', data),
 };
 
+// Notifications (in-app, per-user)
+export const notificationAPI = {
+  getAll: () => api.get('/api/notifications'),
+  markRead: (id) => api.patch(`/api/notifications/${id}/read`),
+  markAllRead: () => api.patch('/api/notifications/read-all'),
+  delete: (id) => api.delete(`/api/notifications/${id}`),
+};
+
 // Admin
 export const adminAPI = {
   kpis: () => api.get('/api/admin/kpis'),

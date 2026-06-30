@@ -1,33 +1,83 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
+
+// Each role's own (working) profile page.
+const PROFILE_PATH = {
+  'super-admin': '/profile',
+  'admin':       '/profile',
+  'hr-manager':  '/hr/profile',
+  'pmo-lead':    '/pmo/profile',
+  'employee':    '/employee/profile',
+  'intern':      '/intern/profile',
+};
+
+// Visual accent + icon per notification type, for quick scanning.
+function notifMeta(type = '') {
+  if (type.includes('approved') || type === 'milestone_reached')
+    return { icon: 'check_circle', color: 'text-emerald-600', bg: 'bg-emerald-50' };
+  if (type.includes('rejected') || type.includes('blocked'))
+    return { icon: 'error', color: 'text-rose-600', bg: 'bg-rose-50' };
+  if (type.includes('task'))
+    return { icon: 'task_alt', color: 'text-blue-600', bg: 'bg-blue-50' };
+  if (type.includes('leave'))
+    return { icon: 'event', color: 'text-amber-600', bg: 'bg-amber-50' };
+  if (type.includes('project'))
+    return { icon: 'work', color: 'text-indigo-600', bg: 'bg-indigo-50' };
+  return { icon: 'notifications', color: 'text-slate-500', bg: 'bg-slate-100' };
+}
+
+// Compact relative time, e.g. "2h ago".
+function relTime(date) {
+  try { return formatDistanceToNow(new Date(date), { addSuffix: true }); }
+  catch { return ''; }
+}
+
+// Dashboard fallback per role — used when a notification link is outside the
+// user's accessible namespace (prevents landing on an "Access Denied" page).
+const ROLE_HOME = {
+  'super-admin': '/admin/dashboard',
+  'admin':       '/admin/dashboard',
+  'hr-manager':  '/hr/dashboard',
+  'pmo-lead':    '/pmo/dashboard',
+  'employee':    '/employee/dashboard',
+  'intern':      '/intern/dashboard',
+};
+
+// Path prefixes each role is allowed to open from a notification.
+const ROLE_PREFIXES = {
+  'hr-manager': ['/hr', '/profile'],
+  'pmo-lead':   ['/pmo', '/profile'],
+  'employee':   ['/employee', '/profile'],
+  'intern':     ['/intern', '/profile'],
+};
+
+// Resolve a notification link to a path the current role can actually open.
+// Admins bypass; anything outside the role's namespace falls back to its dashboard.
+function resolveSafeLink(link, roleSlug) {
+  if (!link) return null;
+  if (roleSlug === 'super-admin' || roleSlug === 'admin') return link;
+  const prefixes = ROLE_PREFIXES[roleSlug] || [];
+  const allowed = prefixes.some((p) => link === p || link.startsWith(`${p}/`));
+  return allowed ? link : (ROLE_HOME[roleSlug] || '/');
+}
 
 export default function Header({ sidebarCollapsed }) {
   const { user, logout } = useAuth();
+  const { enabled: notifEnabled, notifications, unreadCount, refresh, markRead, markAllRead } = useNotifications();
   const navigate = useNavigate();
-  const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [announcements, setAnnouncements] = useState([]);
-  const [readIds, setReadIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('owms_read_notifs') || '[]'); } catch { return []; }
-  });
   const popupRef = useRef();
   const notifRef = useRef();
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
-  const unreadCount = announcements.filter(a => !readIds.includes(a._id)).length;
 
-  useEffect(() => {
-    // TODO: wire to notificationAPI.getNotifications() once notification seed data exists
-    // Suppressing announcementsAPI call to avoid 404 noise until backend is seeded
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('owms_read_notifs', JSON.stringify(readIds));
-  }, [readIds]);
+  // user.role from real backend is a populated object — extract slug
+  const roleSlug = user?.role?.slug || user?.role || '';
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -44,14 +94,19 @@ export default function Header({ sidebarCollapsed }) {
     navigate('/login');
   };
 
-  const markAllRead = () => {
-    setReadIds(announcements.map(a => a._id));
+  const handleNotifClick = async (notif) => {
+    setNotifOpen(false);
+    markRead(notif);
+    const target = resolveSafeLink(notif.link, roleSlug);
+    if (target) navigate(target);
   };
 
   const handleNotifToggle = (e) => {
     e.stopPropagation();
-    setNotifOpen(p => !p);
+    const next = !notifOpen;
+    setNotifOpen(next);
     setProfileOpen(false);
+    if (next) refresh(); // freshen on open
   };
 
   const handleProfileToggle = (e) => {
@@ -60,8 +115,11 @@ export default function Header({ sidebarCollapsed }) {
     setNotifOpen(false);
   };
 
-  // user.role from real backend is a populated object — extract slug
-  const roleSlug = user?.role?.slug || user?.role || '';
+  const goToProfile = () => {
+    setProfileOpen(false);
+    navigate(PROFILE_PATH[roleSlug] || '/profile');
+  };
+
   const displayRole = roleSlug === 'super-admin' || roleSlug === 'admin' ? 'Administrator' :
                       roleSlug === 'hr-manager' || roleSlug === 'hr' ? 'HR Manager' :
                       roleSlug === 'pmo-lead'   || roleSlug === 'pmo' ? 'PMO Lead' :
@@ -82,6 +140,7 @@ export default function Header({ sidebarCollapsed }) {
       <div className="flex items-center gap-5">
         
         {/* Notifications bell */}
+        {notifEnabled && (
         <div className="relative" ref={notifRef}>
           <button
             onClick={handleNotifToggle}
@@ -98,39 +157,51 @@ export default function Header({ sidebarCollapsed }) {
 
           {/* Notifications dropdown */}
           {notifOpen && (
-            <div className="absolute right-0 top-10 w-80 bg-white rounded shadow-lg border border-slate-200 z-50 overflow-hidden text-slate-800">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-                <p className="font-semibold text-[13px] text-slate-900 flex items-center gap-2">
-                  Notifications
-                </p>
+            <div className="absolute right-0 top-11 z-50 w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] sm:w-[380px] bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden text-slate-800">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-[14px] text-slate-900">Notifications</p>
+                  {unreadCount > 0 && (
+                    <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 rounded-full px-2 py-0.5 leading-none">
+                      {unreadCount} new
+                    </span>
+                  )}
+                </div>
                 {unreadCount > 0 && (
-                  <button onClick={markAllRead} className="text-[12px] font-medium text-blue-600 hover:underline">
+                  <button onClick={markAllRead} className="text-[12px] font-medium text-blue-600 hover:text-blue-700">
                     Mark all read
                   </button>
                 )}
               </div>
-              <div className="max-h-80 overflow-y-auto">
-                {announcements.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-                    <p className="text-[13px] text-slate-500">No recent notifications.</p>
+              <div className="max-h-[min(70vh,26rem)] overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center px-4 gap-2">
+                    <span className="material-symbols-outlined text-[32px] text-slate-300">notifications_off</span>
+                    <p className="text-[13px] text-slate-500">You're all caught up</p>
                   </div>
                 ) : (
-                  announcements.slice(0, 10).map(ann => {
-                    const isUnread = !readIds.includes(ann._id);
+                  notifications.slice(0, 12).map(notif => {
+                    const isUnread = !notif.read;
+                    const meta = notifMeta(notif.type);
+                    const preview = (notif.message || '').replace(/\s*\n\s*/g, ' · ');
                     return (
                       <button
-                        key={ann._id}
-                        className={`w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 ${isUnread ? 'bg-blue-50/30' : ''}`}
-                        onClick={() => setReadIds(prev => prev.includes(ann._id) ? prev : [...prev, ann._id])}
+                        key={notif._id}
+                        className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors ${isUnread ? 'bg-blue-50/40' : ''}`}
+                        onClick={() => handleNotifClick(notif)}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1">
-                            <p className={`text-[13px] ${isUnread ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>{ann.title}</p>
-                            <p className="text-[12px] text-slate-500 mt-0.5 line-clamp-2">{ann.content}</p>
-                            <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
-                              {format(new Date(ann.createdAt), 'MMM d, h:mm a')}
+                        <span className={`flex-shrink-0 w-9 h-9 rounded-full ${meta.bg} flex items-center justify-center`}>
+                          <span className={`material-symbols-outlined text-[18px] ${meta.color}`}>{meta.icon}</span>
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-2">
+                            <p className={`flex-1 text-[13px] leading-snug ${isUnread ? 'font-semibold text-slate-900' : 'font-medium text-slate-700'}`}>
+                              {notif.title || 'Notification'}
                             </p>
+                            {isUnread && <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
                           </div>
+                          <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{preview}</p>
+                          <p className="text-[11px] text-slate-400 mt-1">{relTime(notif.createdAt)}</p>
                         </div>
                       </button>
                     );
@@ -140,8 +211,9 @@ export default function Header({ sidebarCollapsed }) {
             </div>
           )}
         </div>
+        )}
 
-        <div className="w-px h-5 bg-slate-700 mx-1" />
+        {notifEnabled && <div className="w-px h-5 bg-slate-700 mx-1" />}
 
         {/* Profile */}
         <div className="relative" ref={popupRef}>
@@ -171,7 +243,7 @@ export default function Header({ sidebarCollapsed }) {
                 <p className="text-[12px] text-slate-500 truncate">{user?.email}</p>
               </div>
               <button
-                onClick={() => { navigate('/profile'); setProfileOpen(false); }}
+                onClick={goToProfile}
                 className="w-full flex items-center gap-2 px-4 py-2 text-left text-slate-700 hover:bg-slate-100 text-[13px] transition-colors"
               >
                 My Profile

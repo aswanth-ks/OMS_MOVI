@@ -144,8 +144,8 @@ export const getTaskById = async (req, res, next) => {
 
 export const updateTask = async (req, res, next) => {
   try {
-    const { title, description, priority, dueDate, effortPoints, subtasks, blockedReason } = req.body;
-    
+    const { title, description, priority, dueDate, effortPoints, subtasks, blockedReason, assignedTo } = req.body;
+
     const task = await Task.findById(req.params.id).populate('project');
     if (!task) return sendError(res, 'Task not found', 404);
 
@@ -154,6 +154,19 @@ export const updateTask = async (req, res, next) => {
     }
 
     const oldDueDate = task.dueDate;
+
+    // (Re)assignment — validate the new assignee belongs to the project, then
+    // clear the needs-reassignment flag once a valid owner is set.
+    let reassignedTo = null;
+    if (assignedTo && assignedTo.toString() !== task.assignedTo?.toString()) {
+      const proj = task.project;
+      const isMember = proj.team.some(t => t.user?.toString() === assignedTo.toString()) ||
+                       proj.interns.some(i => i.user?.toString() === assignedTo.toString());
+      if (!isMember) return sendError(res, 'Assignee is not a member of this project', 400);
+      task.assignedTo = assignedTo;
+      task.needsReassignment = false;
+      reassignedTo = assignedTo;
+    }
 
     if (title) task.title = title;
     if (description) task.description = description;
@@ -165,7 +178,19 @@ export const updateTask = async (req, res, next) => {
 
     await task.save();
 
-    if (dueDate && oldDueDate && new Date(dueDate).getTime() !== new Date(oldDueDate).getTime()) {
+    if (reassignedTo) {
+      const assignee = await User.findById(reassignedTo).select('employmentType');
+      await sendNotification({
+        recipient: reassignedTo,
+        type: 'task_assigned',
+        title: 'Task Assigned to You',
+        message: `You've been assigned the task "${task.title}" on project ${task.project.name}.`,
+        link: assignee?.employmentType === 'Intern' ? '/intern/tasks' : '/employee/tasks',
+        sender: req.user._id,
+      });
+    }
+
+    if (dueDate && oldDueDate && new Date(dueDate).getTime() !== new Date(oldDueDate).getTime() && task.assignedTo) {
       await sendNotification({
         recipient: task.assignedTo,
         type: 'system_alert',

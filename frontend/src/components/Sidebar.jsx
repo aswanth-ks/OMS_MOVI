@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import { Grid2X2, CheckSquare, Users, GraduationCap, BarChart2, LayoutDashboard, CalendarDays, Clock, BookOpen, User, Briefcase } from 'lucide-react';
 
 // Pages that can be unlocked for any role via the Access Matrix.
@@ -71,6 +72,7 @@ const NAV_CONFIG = {
 
 export default function Sidebar({ collapsed, setCollapsed }) {
   const { user, hasPermission } = useAuth();
+  const { hasActivity } = useNotifications();
   // user.role from real backend is a populated object { slug, name, ... }
   // Resolve to the NAV_CONFIG key (legacy short slugs)
   const resolveNavKey = (role) => {
@@ -122,7 +124,9 @@ export default function Sidebar({ collapsed, setCollapsed }) {
 
       {/* Nav links */}
       <nav className={`flex-1 py-6 space-y-1 overflow-y-auto custom-scrollbar ${collapsed ? 'px-3' : 'px-4'}`}>
-        {links.map(({ to, icon, label, isLucide }) => (
+        {links.map(({ to, icon, label, isLucide }) => {
+          const showDot = hasActivity(to);
+          return (
           <NavLink
             key={to}
             to={to}
@@ -139,7 +143,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
                 idleClass = 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A]';
               }
 
-              return `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive ? activeClass : idleClass} ${collapsed ? 'justify-center px-0 py-3' : ''}`;
+              return `relative flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive ? activeClass : idleClass} ${collapsed ? 'justify-center px-0 py-3' : ''}`;
             }}
           >
             {isLucide ? (
@@ -150,8 +154,14 @@ export default function Sidebar({ collapsed, setCollapsed }) {
               <span className="material-symbols-outlined text-[20px] flex-shrink-0">{icon}</span>
             )}
             {!collapsed && <span className="text-[13px] whitespace-nowrap">{label}</span>}
+            {showDot && (collapsed ? (
+              <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
+            ) : (
+              <span className="ml-auto w-2 h-2 rounded-full bg-rose-500 flex-shrink-0" title="New activity" />
+            ))}
           </NavLink>
-        ))}
+          );
+        })}
 
         {/* Granted Access — links unlocked via Access Matrix */}
         {grantedLinks.length > 0 && (

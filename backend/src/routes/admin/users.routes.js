@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getUsers, createUser, getUserById, updateUser,
   deleteUser, updateUserStatus, resetUserPassword, getUserProjects,
+  getUserDeletionImpact,
 } from '../../controllers/admin/users.controller.js';
 import { protect } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
@@ -23,6 +24,9 @@ router.get('/:id', requirePermission('Users', 'read'), getUserById);
 
 // GET /api/admin/users/:id/projects — Get all projects a user is involved in
 router.get('/:id/projects', requirePermission('Users', 'read'), getUserProjects);
+
+// GET /api/admin/users/:id/deletion-impact — Preview consequences before deleting
+router.get('/:id/deletion-impact', requirePermission('Users', 'delete'), getUserDeletionImpact);
 
 // PUT /api/admin/users/:id — Update user
 router.put('/:id', requirePermission('Users', 'update'), auditLog('Update', 'Users'), updateUser);

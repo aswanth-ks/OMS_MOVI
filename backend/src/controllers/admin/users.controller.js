@@ -1,6 +1,7 @@
 import User from '../../models/User.js';
 import Role from '../../models/Role.js';
 import Project from '../../models/Project.js';
+import Task from '../../models/Task.js';
 import { sendSuccess, sendError, sendPaginated } from '../../utils/apiResponse.js';
 import { getPagination } from '../../utils/paginate.js';
 import { sendNotification } from '../../utils/sendNotification.js';
@@ -331,8 +332,54 @@ export const updateUser = async (req, res, next) => {
 };
 
 /**
+ * GET /api/admin/users/:id/deletion-impact
+ * Preview the consequences of deleting a user: projects they manage,
+ * projects they're a member of, and how many open tasks they own.
+ * Lets the admin reassign managers and confirm before the cascade runs.
+ */
+export const getUserDeletionImpact = async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId).select('name');
+    if (!user) return sendError(res, 'User not found', 404);
+
+    const projects = await Project.find({
+      $or: [{ manager: userId }, { 'team.user': userId }, { 'interns.user': userId }],
+    }).select('name code status manager');
+
+    const uid = userId.toString();
+    const managedProjects = [];
+    const memberProjects = [];
+    for (const p of projects) {
+      const entry = { _id: p._id, name: p.name, code: p.code, status: p.status };
+      if (p.manager?.toString() === uid) managedProjects.push(entry);
+      else memberProjects.push(entry);
+    }
+
+    const openTaskCount = await Task.countDocuments({ assignedTo: userId, status: { $ne: 'Done' } });
+
+    sendSuccess(res, {
+      user: { _id: user._id, name: user.name },
+      managedProjects,
+      memberProjects,
+      openTaskCount,
+      requiresManagerReassignment: managedProjects.length > 0,
+    }, 'Deletion impact computed');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * DELETE /api/admin/users/:id
- * Soft delete — sets status to 'Inactive' and marks deletedAt.
+ * Offboarding cascade + soft delete:
+ *  - reassign any projects the user manages to a replacement (required)
+ *  - remove the user from every project team / intern roster
+ *  - flag their open tasks as needing reassignment (assignee cleared)
+ *  - notify affected project managers + the user's HR/PMO
+ *  - soft delete the user (Inactive + deletedAt, email freed for reuse)
+ *
+ * Body: { managerReassignments: { [projectId]: newManagerId } }
  */
 export const deleteUser = async (req, res, next) => {
   try {
@@ -346,13 +393,88 @@ export const deleteUser = async (req, res, next) => {
       return sendError(res, 'You cannot delete your own account', 400);
     }
 
-    // Soft delete — free the email so it can be reused
+    const userId = user._id.toString();
+    const { managerReassignments = {} } = req.body || {};
+
+    // Every project this user touches
+    const projects = await Project.find({
+      $or: [{ manager: user._id }, { 'team.user': user._id }, { 'interns.user': user._id }],
+    });
+
+    // Projects they MANAGE need a valid, active replacement before we proceed
+    const managed = projects.filter(p => p.manager?.toString() === userId);
+    const missing = managed.filter(p => !managerReassignments[p._id.toString()]);
+    if (missing.length > 0) {
+      return sendError(
+        res,
+        `This user manages ${managed.length} project(s). A replacement manager is required for: ${missing.map(p => p.name).join(', ')}`,
+        409
+      );
+    }
+    for (const p of managed) {
+      const newMgrId = managerReassignments[p._id.toString()];
+      const newMgr = await User.findOne({
+        _id: newMgrId, status: 'Active', deletedAt: { $exists: false },
+      }).select('_id');
+      if (!newMgr) return sendError(res, `Replacement manager for "${p.name}" is invalid or inactive`, 400);
+    }
+
+    // 1) Reassign managed projects + strip the user from all rosters
+    const notifyManagerIds = new Set();
+    for (const p of projects) {
+      if (p.manager?.toString() === userId) {
+        const newMgrId = managerReassignments[p._id.toString()];
+        p.manager = newMgrId;
+        notifyManagerIds.add(newMgrId.toString());
+      } else if (p.manager) {
+        notifyManagerIds.add(p.manager.toString());
+      }
+      p.team = p.team.filter(t => t.user?.toString() !== userId);
+      p.interns = p.interns.filter(i => i.user?.toString() !== userId);
+      await p.save({ validateBeforeSave: false });
+    }
+
+    // 2) Flag the user's open tasks for reassignment (clear assignee)
+    const openTaskCount = await Task.countDocuments({ assignedTo: user._id, status: { $ne: 'Done' } });
+    if (openTaskCount > 0) {
+      await Task.updateMany(
+        { assignedTo: user._id, status: { $ne: 'Done' } },
+        {
+          $set: { assignedTo: null, needsReassignment: true },
+          $push: { statusHistory: { status: 'Unassigned', changedBy: req.user._id, changedAt: new Date() } },
+        }
+      );
+    }
+
+    // 3) Soft delete — free the email so it can be reused
     user.status = 'Inactive';
     user.deletedAt = new Date();
     user.email = `deleted_${Date.now()}_${user.email}`;
     await user.save({ validateBeforeSave: false });
 
-    sendSuccess(res, { _id: user._id, name: user.name }, 'User deleted successfully');
+    // 4) Notify the people who now own the handover
+    const recipients = new Set(notifyManagerIds);
+    if (user.hrManager) recipients.add(user.hrManager.toString());
+    if (user.pmoLead) recipients.add(user.pmoLead.toString());
+    recipients.delete(userId);
+    for (const rid of recipients) {
+      await sendNotification({
+        recipient: rid,
+        type: 'system_alert',
+        title: 'Team member offboarded',
+        message: `${user.name} was removed from the system.${openTaskCount > 0 ? ` ${openTaskCount} of their open task(s) now need reassignment.` : ''}`,
+        link: '/pmo/tasks',
+        sender: req.user._id,
+      });
+    }
+
+    sendSuccess(res, {
+      _id: user._id,
+      name: user.name,
+      projectsAffected: projects.length,
+      managedReassigned: managed.length,
+      tasksUnassigned: openTaskCount,
+    }, 'User deleted and work handed over');
   } catch (error) {
     next(error);
   }

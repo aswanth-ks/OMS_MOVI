@@ -96,7 +96,7 @@ export const createProject = async (req, res, next) => {
         type: 'project_assigned',
         title: 'New Project Assignment',
         message: `You've been assigned as HR Representative for ${name} by ${req.user.name}.`,
-        link: `/employee/projects/${project._id}`,
+        link: '/hr/projects',
         sender: req.user._id,
       });
 
@@ -198,7 +198,7 @@ export const updateProject = async (req, res, next) => {
           type: 'system_alert',
           title: `Project ${status}`,
           message: `Project ${project.name} has been marked as ${status.toLowerCase()}.`,
-          link: `/employee/projects/${project._id}`,
+          link: '/employee/projects',
           sender: req.user._id,
         });
       }
@@ -259,7 +259,7 @@ export const addTeamMembers = async (req, res, next) => {
         type: 'project_assigned',
         title: 'New Project Assignment',
         message: `You've been added to ${project.name} as ${member.role} by ${req.user.name}.`,
-        link: `/employee/projects/${project._id}`,
+        link: '/employee/projects',
         sender: req.user._id,
       });
 

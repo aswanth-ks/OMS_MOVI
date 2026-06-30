@@ -135,7 +135,7 @@ export const applyForLeave = async (req, res, next) => {
         type: 'leave_requested',
         title: 'New Leave Request',
         message: `${employee.name} has requested ${type} leave from ${fromStr} to ${toStr} (${days} working days). Reason: ${reason}`,
-        link: '/hr/leaves/pending',
+        link: '/hr/leave',
         sender: req.user._id,
       });
     }
@@ -190,7 +190,7 @@ export const cancelLeave = async (req, res, next) => {
         type: 'system_alert',
         title: 'Leave Request Cancelled',
         message: `${employee.name} cancelled their leave request (${fromStr} to ${toStr})`,
-        link: '/hr/leaves',
+        link: '/hr/leave',
         sender: req.user._id,
       });
     }

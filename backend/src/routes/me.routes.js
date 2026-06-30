@@ -25,8 +25,30 @@ router.get('/profile', async (req, res, next) => {
 // PATCH /api/me/profile
 router.patch('/profile', async (req, res, next) => {
   try {
-    const { phone, address, bio, linkedIn, linkedin, emergencyContact, skills } = req.body;
+    const {
+      name, username, profileImage, githubLink, projectLink,
+      phone, address, bio, linkedIn, linkedin, emergencyContact, skills,
+    } = req.body;
     const set = {};
+
+    // Identity (self-service editable by any role)
+    if (name        !== undefined && name.trim()) set.name = name.trim();
+    if (profileImage !== undefined) set.profileImage = profileImage;
+    if (githubLink  !== undefined) set.githubLink  = githubLink;
+    if (projectLink !== undefined) set.projectLink = projectLink;
+
+    // Username — enforce uniqueness across users
+    if (username !== undefined) {
+      const uname = (username || '').trim();
+      if (uname) {
+        const taken = await User.findOne({ username: uname, _id: { $ne: req.user._id } }).select('_id');
+        if (taken) return sendError(res, 'That username is already taken', 409);
+        set.username = uname;
+      } else {
+        set.username = undefined; // allow clearing
+      }
+    }
+
     if (phone       !== undefined) set.phone   = phone;
     if (address     !== undefined) set.address = address;
     if (bio         !== undefined) set.bio     = bio;
@@ -40,9 +62,24 @@ router.patch('/profile', async (req, res, next) => {
       if (emergencyContact.phone    !== undefined) set['emergencyContact.phone']    = emergencyContact.phone;
       if (emergencyContact.relation !== undefined) set['emergencyContact.relation'] = emergencyContact.relation;
     }
+
+    // Split $set / $unset so clearing username actually removes it (keeps sparse unique index happy)
+    const update = {};
+    const setOps = {};
+    const unsetOps = {};
+    for (const [k, v] of Object.entries(set)) {
+      if (v === undefined) unsetOps[k] = '';
+      else setOps[k] = v;
+    }
+    if (Object.keys(setOps).length) update.$set = setOps;
+    if (Object.keys(unsetOps).length) update.$unset = unsetOps;
+
     const updated = await User.findByIdAndUpdate(
-      req.user._id, { $set: set }, { new: true, runValidators: false }
-    ).populate('department', 'name code').populate('role', 'name slug').select('-password -refreshToken');
+      req.user._id, update, { new: true, runValidators: false }
+    )
+      .populate('department', 'name code')
+      .populate({ path: 'role', populate: { path: 'permissions', select: 'name resource action status' } })
+      .select('-password -refreshToken');
     sendSuccess(res, updated, 'Profile updated successfully');
   } catch (err) { next(err); }
 });

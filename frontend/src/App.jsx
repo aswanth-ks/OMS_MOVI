@@ -185,7 +185,7 @@ export default function App() {
 
       
       {/* Global Profile Route */}
-      <Route path="/profile" element={<ProtectedRoute allowedRoles={['intern', 'hr', 'pmo', 'admin']}><Profile /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute allowedRoles={['intern', 'employee', 'hr', 'pmo', 'admin']}><Profile /></ProtectedRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />

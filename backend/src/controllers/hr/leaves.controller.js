@@ -155,7 +155,7 @@ export const reviewLeave = async (req, res, next) => {
           type: 'system_alert',
           title: 'Team Member on Leave',
           message: `${leave.user.name} leave approved: ${leave.fromDate.toDateString()} to ${leave.toDate.toDateString()}. Project impact: review tasks.`,
-          link: '/pmo/approvals/leaves',
+          link: '/pmo/approvals',
           sender: req.user._id,
         });
       }

@@ -49,6 +49,8 @@ export default function PMOTaskBoard() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [internAssignTask, setInternAssignTask] = useState(null);
   const [selectedInternId, setSelectedInternId] = useState('');
+  const [reassignTask, setReassignTask] = useState(null);
+  const [reassignTo, setReassignTo] = useState('');
 
   // Create Task Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -98,6 +100,7 @@ export default function PMOTaskBoard() {
           status: STATUS_MAP_BE_TO_FE[t.status] || 'backlog',
           effort: `${t.effortPoints || 0} pts`,
           blocked: t.status === 'Blocked',
+          needsReassignment: !!t.needsReassignment,
           assignees: [{ initial, bg: 'bg-[#EFF6FF]', text: 'text-[#1D4ED8]', name }],
           raw: t
         };
@@ -158,6 +161,24 @@ export default function PMOTaskBoard() {
       fetchProjectTasksAndDetails();
     } catch (error) {
       toast.error('Failed to assign task to intern');
+    }
+  };
+
+  // Reassign an orphaned (needs-reassignment) task to any project member
+  const handleReassignSubmit = async (e) => {
+    e.preventDefault();
+    if (!reassignTo) {
+      toast.error('Please select a team member');
+      return;
+    }
+    try {
+      await pmoAPI.updateTask(reassignTask.id, { assignedTo: reassignTo });
+      toast.success('Task reassigned successfully');
+      setReassignTask(null);
+      setReassignTo('');
+      fetchProjectTasksAndDetails();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to reassign task');
     }
   };
 
@@ -254,6 +275,16 @@ export default function PMOTaskBoard() {
           </div>
         </div>
 
+        {/* Needs-reassignment alert banner */}
+        {!loading && tasks.some(t => t.needsReassignment) && (
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl">
+            <span className="material-symbols-outlined text-[#D97706] text-[20px]">person_alert</span>
+            <p className="text-[13px] text-[#92400E] flex-1">
+              <strong>{tasks.filter(t => t.needsReassignment).length}</strong> task(s) on this project are unassigned after a team member was removed. Reassign them to keep work moving.
+            </p>
+          </div>
+        )}
+
         {/* BOARD WRAPPER */}
         {loading ? (
           <div className="flex justify-center items-center py-24 flex-1">
@@ -300,18 +331,26 @@ export default function PMOTaskBoard() {
                           </button>
 
                           {/* Tags */}
-                          <div className="flex justify-between items-start mb-3">
+                          <div className="flex justify-between items-start mb-3 gap-2">
                             <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${pStyles.bg} ${pStyles.color}`}>
                               <span className="material-symbols-outlined text-[12px]">{pStyles.icon}</span>
                               {task.priority}
                             </div>
-                            
-                            {task.blocked && (
-                              <div className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#EF4444] text-white flex items-center gap-1 shadow-sm">
-                                <span className="material-symbols-outlined text-[12px]">block</span>
-                                Blocked
-                              </div>
-                            )}
+
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {task.needsReassignment && (
+                                <div className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#F59E0B] text-white flex items-center gap-1 shadow-sm">
+                                  <span className="material-symbols-outlined text-[12px]">person_alert</span>
+                                  Needs reassign
+                                </div>
+                              )}
+                              {task.blocked && (
+                                <div className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#EF4444] text-white flex items-center gap-1 shadow-sm">
+                                  <span className="material-symbols-outlined text-[12px]">block</span>
+                                  Blocked
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           {/* Title */}
@@ -324,13 +363,24 @@ export default function PMOTaskBoard() {
                               {task.effort}
                             </div>
                             
-                            <div className="flex -space-x-1.5">
-                              {task.assignees.map((a, i) => (
-                                <div key={i} className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] border-2 border-white bg-blue-100 text-blue-700`} title={a.name}>
-                                  {a.initial}
-                                </div>
-                              ))}
-                            </div>
+                            {task.needsReassignment ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setReassignTask(task); setReassignTo(''); }}
+                                className="flex items-center gap-1 text-[11px] font-bold text-white bg-[#F59E0B] hover:bg-[#D97706] px-2.5 py-1 rounded-md transition-colors shadow-sm"
+                                title="Assign this task to a team member"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">person_add</span>
+                                Reassign
+                              </button>
+                            ) : (
+                              <div className="flex -space-x-1.5">
+                                {task.assignees.map((a, i) => (
+                                  <div key={i} className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] border-2 border-white bg-blue-100 text-blue-700`} title={a.name}>
+                                    {a.initial}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
                         </div>
@@ -470,6 +520,45 @@ export default function PMOTaskBoard() {
               <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
                 <button type="button" onClick={() => setInternAssignTask(null)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg">Cancel</button>
                 <button type="submit" className="px-4 py-2 text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 rounded-lg">Assign</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REASSIGN TASK MODAL */}
+      {reassignTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col text-left">
+            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-900">Reassign Task</h3>
+              <button onClick={() => setReassignTask(null)} className="text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleReassignSubmit}>
+              <div className="p-5 space-y-3">
+                <p className="text-sm text-slate-600">
+                  <strong>{reassignTask.title}</strong> lost its owner. Choose a team member to take it over.
+                </p>
+                <select
+                  value={reassignTo}
+                  onChange={e => setReassignTo(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-600"
+                  required
+                >
+                  <option value="">Select team member...</option>
+                  {getResourcePool().map(res => (
+                    <option key={res.id} value={res.id}>{res.name}</option>
+                  ))}
+                </select>
+                {getResourcePool().length === 0 && (
+                  <p className="text-[12px] text-amber-600">No active members on this project. Add someone to the team first.</p>
+                )}
+              </div>
+              <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+                <button type="button" onClick={() => setReassignTask(null)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold bg-[#D97706] text-white hover:bg-[#B45309] rounded-lg">Reassign</button>
               </div>
             </form>
           </div>

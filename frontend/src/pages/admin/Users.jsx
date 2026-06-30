@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, Upload } from 'lucide-react';
 import PageWrapper from '../../components/PageWrapper';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import DeleteUserModal from '../../components/shared/DeleteUserModal';
 import BulkImportModal from '../../components/shared/BulkImportModal';
 import AccessDenied from '../../components/shared/AccessDenied';
 import { adminAPI } from '../../utils/api';
@@ -145,12 +146,11 @@ export default function AdminUsers() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  // deleteTarget = { id, name } for single | { ids, name } for bulk
+  const [deleteTarget, setDeleteTarget] = useState(null);   // bulk: { ids, name }
+  const [deleteUserTarget, setDeleteUserTarget] = useState(null); // single: { id, name }
 
-  const executeSingleDelete = async () => {
-    await adminAPI.deleteUser(deleteTarget.id);
-    setDeleteTarget(null);
+  const handleUserDeleted = async () => {
+    setDeleteUserTarget(null);
     await fetchUsers();
   };
 
@@ -434,7 +434,7 @@ export default function AdminUsers() {
                             <span className="material-symbols-outlined text-[18px]">edit</span>
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); if (canDelete) setDeleteTarget({ id: user._id, name: user.name }); }}
+                            onClick={(e) => { e.stopPropagation(); if (canDelete) setDeleteUserTarget({ id: user._id, name: user.name }); }}
                             disabled={!canDelete}
                             title={canDelete ? 'Delete user' : 'You do not have permission to delete users. Contact your administrator.'}
                             className={`transition-colors ${canDelete ? 'text-[#64748B] hover:text-[#DC2626]' : 'text-[#CBD5E1] cursor-not-allowed'}`}
@@ -480,13 +480,24 @@ export default function AdminUsers() {
 
       </div>
 
+      {/* Bulk delete confirmation */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         entityName={deleteTarget?.name}
-        entityLabel={deleteTarget?.ids ? 'selection' : 'user'}
-        onConfirm={deleteTarget?.ids ? executeBulkDelete : executeSingleDelete}
+        entityLabel="selection"
+        onConfirm={executeBulkDelete}
       />
+
+      {/* Single user — impact-aware offboarding */}
+      {deleteUserTarget && (
+        <DeleteUserModal
+          userId={deleteUserTarget.id}
+          userName={deleteUserTarget.name}
+          onClose={() => setDeleteUserTarget(null)}
+          onDeleted={handleUserDeleted}
+        />
+      )}
 
       <BulkImportModal
         isOpen={showImport}

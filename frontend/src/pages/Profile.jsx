@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { usersAPI } from '../api';
+import { meAPI } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import PageWrapper from '../components/PageWrapper';
 import toast from 'react-hot-toast';
@@ -28,7 +28,7 @@ export default function Profile() {
     .toUpperCase() || 'U';
 
   useEffect(() => {
-    usersAPI.getMe()
+    meAPI.getProfile()
       .then(r => {
         const u = r.data?.data || {};
         setForm({
@@ -66,9 +66,15 @@ export default function Profile() {
     
     setSaving(true);
     try {
-      const res = await usersAPI.updateMe(form);
+      const res = await meAPI.updateProfile(form);
       const updatedUser = res.data?.data;
-      if (setUser) setUser(updatedUser);
+      if (setUser && updatedUser) {
+        setUser((prev) => {
+          const merged = { ...prev, ...updatedUser };
+          try { localStorage.setItem('owms_user', JSON.stringify(merged)); } catch { /* ignore */ }
+          return merged;
+        });
+      }
       toast.success('Your profile has been updated!');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update profile');

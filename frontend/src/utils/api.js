@@ -67,9 +67,10 @@ export const adminAPI = {
   getUsers: (params) => api.get('/admin/users', { params }),
   getUser: (id) => api.get(`/admin/users/${id}`),
   getUserProjects: (id) => api.get(`/admin/users/${id}/projects`),
+  getUserDeletionImpact: (id) => api.get(`/admin/users/${id}/deletion-impact`),
   createUser: (data) => api.post('/admin/users', data),
   updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
-  deleteUser: (id) => api.delete(`/admin/users/${id}`),
+  deleteUser: (id, data) => api.delete(`/admin/users/${id}`, { data }),
   updateUserStatus: (id, status) => api.patch(`/admin/users/${id}/status`, { status }),
   resetUserPassword: (id, data) => api.post(`/admin/users/${id}/reset-password`, data),
 
