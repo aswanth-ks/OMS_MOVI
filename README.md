@@ -209,3 +209,9 @@ Deployed as **two services**: a backend **Web Service** and a frontend **Static 
 - JWT auth with access + refresh tokens; passwords hashed with bcrypt.
 - RBAC enforced on both API and UI; audit logging of critical actions.
 - Helmet, rate limiting, and CORS configured; soft-delete preserves history and frees emails for reuse.
+
+---
+
+## © Ownership
+
+© 2026 **Movi Cloud Labs**. All rights reserved. This project and its source code are proprietary to Movi Cloud Labs.
