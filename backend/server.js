@@ -1,3 +1,7 @@
+/*
+ * Office Workspace Management System (OWMS)
+ * Copyright © 2026 Movi Cloud Labs. All rights reserved. Proprietary and confidential.
+ */
 import 'dotenv/config';
 import app from './src/app.js';
 import connectDB from './src/config/db.js';

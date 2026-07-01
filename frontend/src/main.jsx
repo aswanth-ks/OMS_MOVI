@@ -1,3 +1,7 @@
+/*
+ * Office Workspace Management System (OWMS)
+ * Copyright © 2026 Movi Cloud Labs. All rights reserved. Proprietary and confidential.
+ */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

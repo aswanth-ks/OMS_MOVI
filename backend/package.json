@@ -1,6 +1,9 @@
 {
   "name": "owms-backend",
   "version": "2.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "Movi Cloud Labs",
   "type": "module",
   "description": "OWMS Backend API — Movi Cloud Labs",
   "main": "server.js",

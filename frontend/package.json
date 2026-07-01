@@ -2,6 +2,9 @@
   "name": "owms-frontend",
   "version": "1.0.1",
   "description": "OWMS Frontend - Movi Cloud Labs",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "Movi Cloud Labs",
   "type": "module",
   "scripts": {
     "dev": "vite",
