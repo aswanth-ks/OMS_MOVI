@@ -1,153 +1,211 @@
-# 🚀 Organization Management System (OMS)
+# 🏢 Office Workspace Management System (OWMS / OMS)
 
-A highly advanced, enterprise-grade SaaS platform designed to streamline corporate workflows. OMS acts as the central nervous system for an organization, seamlessly uniting System Administration, Human Resources (HR), Project Management Offices (PMO), and Employees into a single, cohesive, and isolated ecosystem.
-
----
-
-## 🛠️ Comprehensive Tech Stack
-
-OMS leverages modern web technologies to ensure a scalable, highly responsive, and beautiful user experience.
-
-- **Frontend Environment:**
-  - **Framework:** React.js bootstrapped with Vite for lightning-fast HMR and optimized production builds.
-  - **Routing:** React Router v6 for dynamic, role-based client-side routing.
-  - **Styling:** Tailwind CSS for a highly customized, scalable design system without external component bloat.
-  - **Iconography:** Google Material Symbols (Variable fonts) for crisp, premium icons.
-- **Backend Architecture:**
-  - **Runtime:** Node.js.
-  - **Framework:** Express.js providing robust RESTful APIs.
-- **Database Layer:**
-  - **Database:** MongoDB (NoSQL).
-  - **ODM:** Mongoose for strict schema validation, relationships, and queries.
-- **Security:**
-  - **Authentication:** JWT (JSON Web Tokens) securely stored in HTTP-only cookies or local storage.
-  - **Authorization:** Strict Role-Based Access Control (RBAC) utilizing an Access Matrix paradigm.
+A role-based enterprise workspace platform that unifies **System Administration, Human Resources (HR), the Project Management Office (PMO), Employees, and Interns** into one system. Each role logs into an isolated, permission-scoped environment for managing people, projects, tasks, attendance, leave, learning, and onboarding.
 
 ---
 
-## 🏗️ Folder Structure
+## 🛠️ Tech Stack
+
+**Frontend**
+- **React 18** + **Vite** (fast HMR, optimized production builds)
+- **React Router v6** — role-based client-side routing with route guards
+- **Tailwind CSS** — custom design system
+- **Recharts** — dashboards & analytics
+- **Framer Motion** — animations/transitions
+- **react-hot-toast** — notifications, **date-fns** — date formatting
+- **Axios** — API client with JWT interceptor
+- **lucide-react** + Google Material Symbols — iconography
+
+**Backend**
+- **Node.js** + **Express.js** — RESTful API
+- **MongoDB** + **Mongoose 8** — data layer with schema validation
+- **JWT** (access + refresh) — authentication
+- **helmet**, **express-rate-limit**, **cors** — security hardening
+- **express-validator** — request validation
+- **multer** — file uploads, **nodemailer** — transactional email
+- **pdfkit** + **xlsx** — report/export generation
+
+---
+
+## 🔐 Roles
+
+| Role slug      | Label          | Scope |
+|----------------|----------------|-------|
+| `super-admin` / `admin` | Administrator | Users, roles, departments, access matrix, audit logs, settings, reports |
+| `hr-manager`   | HR Manager     | Employees, interns, onboarding, attendance, leave, HR task board, learning |
+| `pmo-lead`     | PMO Lead       | Projects, project teams, task assignment, monitoring, approvals, reports |
+| `employee`     | Employee       | Own tasks, projects, team, attendance, leave, profile |
+| `intern`       | Intern         | Own tasks, learning resources, attendance, leave, profile |
+
+Authorization is enforced by a dynamic **Role-Based Access Control (RBAC) Access Matrix** — admins toggle CRUD permissions per role per module, and both the API (middleware) and the UI (route guards + permission gates) respect it.
+
+---
+
+## ✨ Key Features
+
+### Core workflows
+- **Projects (PMO):** create projects, assign an HR representative, build an isolated project team from the company directory, and manage deliverables on a project-scoped Kanban board with effort points, priorities, and health status (On Track / At Risk / Delayed).
+- **Tasks:** lifecycle `Todo → In Progress → In Review → Done` (with a `Blocked` state). PMO/HR assign work; employees/interns execute and submit for review; PMO approves or requests changes.
+- **People (HR):** employee & intern directory, onboarding checklists, attendance, leave requests/approvals, performance reviews, and learning-resource assignment.
+- **Leave & attendance:** requests flow to HR and/or the PMO project manager for approval.
+
+### In-app notifications
+- A **notification bell** (all roles except admin) with unread count, polling every 30s, and a redesigned dropdown (type icons, relative time, responsive).
+- **Per-nav red dots** on sidebar items showing unseen activity per section; they clear when the user visits that page. Backed by a shared `NotificationContext`.
+
+### Self-service profiles
+- Every role has a working "My Profile" page backed by `/api/me/profile` (name, username, avatar, bio, links, contact, password change).
+
+### Safe user offboarding
+- Deleting a user runs an **offboarding cascade**: an impact preview (managed projects, team memberships, open tasks), a **required replacement manager** for any project they lead, removal from all team rosters, their open tasks flagged **"Needs reassignment"**, and notifications to the affected managers/HR. The user is then **soft-deleted** (records preserved).
+- The PMO task board surfaces **"Needs reassign"** tasks (badge + banner + one-click reassign).
+- A **startup self-heal** scrubs any lingering references to already-deleted users from project rosters and open tasks.
+
+---
+
+## 🏗️ Project Structure
 
 ```text
 OMS/
 ├── backend/
-│   ├── config/          # MongoDB connections, env variables
-│   ├── controllers/     # Route logic (Auth, Users, Projects, Tasks)
-│   ├── models/          # Mongoose Schemas (User, Project, Role, Task, etc.)
-│   ├── routes/          # Express route definitions
-│   ├── middleware/      # JWT verification, RBAC guard middleware
-│   └── server.js        # Entry point
+│   ├── server.js                # Entry point (DB connect, permission sync, startup jobs)
+│   └── src/
+│       ├── config/              # DB connection, env validation, seed scripts
+│       ├── controllers/         # Route logic, grouped by role (admin/ hr/ pmo/ employee/ intern/)
+│       ├── models/              # Mongoose schemas (User, Role, Project, Task, Notification, …)
+│       ├── routes/              # Express routers, mounted per role namespace
+│       ├── middleware/          # auth (JWT), rbac, scoping, upload, audit, error handling
+│       └── utils/               # notifications, email, tokens, cleanup jobs
 └── frontend/
-    ├── public/          # Static assets
-    ├── src/
-    │   ├── api/         # Axios interceptors and endpoint definitions
-    │   ├── components/  # Reusable UI (Sidebar, PageWrapper, Modal, StatusBadge)
-    │   ├── contexts/    # React Context (AuthContext for global user state)
-    │   ├── pages/       # Role-based views (Admin, HR, PMO, Intern)
-    │   ├── App.jsx      # Main router and route protection logic
-    │   └── index.css    # Tailwind directives and custom scrollbar CSS
+    ├── public/                  # Static assets + _redirects (SPA fallback)
+    └── src/
+        ├── api/ + utils/api.js  # Axios instances & endpoint definitions
+        ├── components/          # Reusable UI (Header, Sidebar, Modal, dialogs, gates)
+        ├── contexts/            # AuthContext, NotificationContext
+        ├── pages/               # Role-scoped views (admin/ hr/ pmo/ employee/ intern/)
+        ├── routes/              # ProtectedRoute (role + permission guards)
+        └── App.jsx              # Router + route protection
+```
+
+**API namespaces** (backend mounts): `/api/auth`, `/api/me`, `/api/notifications`, `/api/admin/*`, `/api/hr/*`, `/api/pmo/*`, `/api/employee/*`, `/api/intern/*`.
+
+---
+
+## ⚙️ Local Setup
+
+**Prerequisites:** Node.js v18+ and a MongoDB instance (local or Atlas).
+
+```bash
+git clone <repository-url>
+cd OMS
+```
+
+### 1. Backend
+```bash
+cd backend
+npm install
+```
+Create `backend/.env` (see `.env.example`):
+```env
+PORT=5000
+NODE_ENV=development
+MONGO_URI=mongodb://localhost:27017/owms
+
+JWT_SECRET=replace_with_a_long_random_secret_min_32_chars
+JWT_EXPIRE=7d
+JWT_REFRESH_SECRET=replace_with_another_long_random_secret
+JWT_REFRESH_EXPIRE=30d
+
+# CORS: the frontend origin
+FRONTEND_URL=http://localhost:5173
+# Used to build links in emails (usually same as FRONTEND_URL)
+APP_URL=http://localhost:5173
+
+BCRYPT_ROUNDS=12
+UPLOAD_PATH=./uploads
+MAX_FILE_SIZE=10485760
+
+# Optional — email (password reset / welcome emails)
+# EMAIL_HOST=smtp.gmail.com
+# EMAIL_PORT=587
+# EMAIL_USER=you@example.com
+# EMAIL_PASS=your_app_password
+```
+Seed data and run:
+```bash
+npm run seed        # seed roles, departments, demo data
+npm run seed:users  # seed user accounts
+npm run dev         # start with nodemon (http://localhost:5000)
+```
+
+### 2. Frontend
+```bash
+cd frontend
+npm install
+```
+Create `frontend/.env` (see `.env.example`):
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+```bash
+npm run dev   # http://localhost:5173
 ```
 
 ---
 
-## 🏛️ Role-Based Architecture & Core Workflows
+## 🚀 Deployment (Render)
 
-OMS strictly partitions functionality based on user roles. The system routes users to completely different environments, ensuring zero data overlap and maximum security.
+Deployed as **two services**: a backend **Web Service** and a frontend **Static Site**.
 
-### 1. 🛡️ The Admin (System Administration)
-The Admin holds the "God View" of the entire system. Their dashboard is focused on security, infrastructure, and access management.
-- **Access Matrix & Permissions:** Admins can dynamically toggle Create, Read, Update, and Delete (CRUD) permissions for specific roles across specific modules.
-- **User & Department Management:** Admins create top-level departments (e.g., Engineering, HR, Finance) and seed user accounts.
-- **Immutable Audit Logs:** Every critical action (login, task creation, project deletion) is tracked in the database and visible to the Admin for security compliance.
-- **System Reports:** High-level metrics on system usage and active sessions.
+### Backend (Web Service)
+- Build: `npm install` · Start: `npm start`
+- Environment variables:
+  ```
+  NODE_ENV=production
+  MONGO_URI=<MongoDB Atlas connection string>
+  JWT_SECRET=<random 32+ chars>
+  JWT_REFRESH_SECRET=<different random 32+ chars>
+  FRONTEND_URL=https://<your-frontend>.onrender.com   # exact origin, no trailing slash
+  APP_URL=https://<your-frontend>.onrender.com
+  ```
+  (plus optional `EMAIL_*`). Do **not** set `PORT` — Render provides it.
 
-### 2. 👥 HR (Human Resources)
-HR is responsible for managing the **People**. They do not manage project deliverables; they manage employee welfare, compliance, and attendance.
-- **Global Employee Directory:** Full access to view all active employees and interns across the organization.
-- **Attendance & Leave Management:** Tracking who clocked in, leave requests, and overall availability.
-- **Performance Appraisals:** End-of-year or quarterly reviews based on input from PMOs.
-- **HR Task Board:** A Kanban board dedicated to administrative tasks (e.g., "Update Onboarding Docs", "Process Payroll") assigned to HR interns or staff.
+### Frontend (Static Site)
+- Build: `npm install && npm run build` · Publish directory: `dist`
+- Environment variable (baked in at **build** time — rebuild after changing):
+  ```
+  VITE_API_URL=https://<your-backend>.onrender.com/api
+  ```
+- **SPA routing:** add a rewrite rule so refresh on any route works:
+  `Source: /*  →  Destination: /index.html  →  Action: Rewrite`
+  (a `public/_redirects` file with `/* /index.html 200` is included as a fallback)
 
-### 3. 🎯 PMO (Project Management Office)
-PMO is strictly responsible for managing **Projects, Deliverables, and Timelines**.
-- **The "Isolated Team" Workflow:** 
-  1. A PMO clicks **"New Project"** to launch the Multi-Step Project Wizard.
-  2. **Step 1:** They enter project metadata (Code, Name, Due Date) and *assign an HR Representative* to oversee the team's compliance and welfare.
-  3. **Step 2 (Resource Request):** The PMO defines exactly what they need (e.g., "2 Frontend Developers, 1 Full Stack Intern").
-  4. **Step 3 (Team Assembly):** The PMO browses the global company directory and manually selects specific employees to fulfill those requests.
-  5. **Isolation:** The selected employees are now pulled into an **Isolated Project Team**. The PMO has full authority over their tasks within this context.
-- **PMO Task Assignment Board:** A Project-scoped Kanban board where PMOs create deliverables, assign effort points, flag blockers, and track velocity.
-- **Monitoring & Timeline:** Advanced Gantt charts and project health metrics (On Track, At Risk, Delayed).
-
-### 4. 💼 Intern / Employee (The Workforce)
-The workforce logs into a highly focused, distraction-free environment to execute their work.
-- **My Tasks Dashboard:** Employees view tasks assigned to them by HR (admin tasks) or their PMO (project deliverables).
-- **Execution Workflow:** 
-  - Tasks start as **"Open"**.
-  - Employee clicks **"Start Task"** (shifts to "In Progress").
-  - Upon completion, they click **"Submit for Review"** (shifts to "Needs Review").
-  - The PMO or HR then reviews the work and either requests changes or marks it "Completed".
-- **Learning & Performance:** Employees can view their own performance metrics and access company learning resources.
+**Cross-link to remember:** `VITE_API_URL` (frontend) points at the backend; `FRONTEND_URL` (backend) points at the frontend — a mismatch causes CORS / "Network Error".
 
 ---
 
-## 📊 Database Schema Overview (MongoDB)
-
-Our MongoDB implementation utilizes relational references (`populate()`) to link the ecosystem together:
-
-- **Users Collection:** Stores credentials, Role references, Department references, and Profile data.
-- **Roles & Permissions Collection:** Defines the RBAC Access Matrix dynamically.
-- **Projects Collection:** Stores project metadata, health status, the assigned PMO (Owner), the assigned HR Rep, and an array of ObjectIds referencing the isolated `teamMembers`.
-- **Tasks Collection:** Stores task details, priority, effort, linked `projectId`, assigned `userId`, and current status (Backlog, In Progress, Review, Completed).
-
----
-
-## 🎨 Premium UI/UX Design Philosophy
-
-OMS was built with a strict adherence to **Advanced SaaS Aesthetics**. It is designed to feel "wise", dense, and incredibly professional.
-- **High-Density Layouts:** Eliminating excessive whitespace to provide data-rich dashboards suitable for enterprise management.
-- **Unified Component System:** Heavy reliance on a core `PageWrapper`, custom interactive `Modal` overlays, and dynamic `StatusBadge` components.
-- **Color Psychology:** 
-  - Backgrounds: Crisp Slate (`#F8FAFC`) with pure white cards.
-  - Typography: Midnight Blue (`#0F172A`) for intense readability.
-  - Status Indicators: Emerald (`#10B981`) for Success, Amber (`#F59E0B`) for Warnings, Rose (`#EF4444`) for Critical blockers, and Royal Blue (`#2563EB`) for Primary Actions.
-- **Micro-Interactions:** Custom thin scrollbars, hover-state shadows, smooth CSS transitions, and drag-and-drop mechanics ensure the platform feels alive.
+## 📊 Core Data Models
+- **User** — credentials, role & department refs, profile, onboarding checklist, employment/intern fields; soft-deleted via `deletedAt`.
+- **Role / Permission** — the dynamic RBAC access matrix.
+- **Project** — metadata, manager (PMO), HR rep, `team[]` & `interns[]` rosters, milestones, health status.
+- **Task** — title, priority, effort points, status, `project` + `assignedTo`/`assignedBy` refs, `needsReassignment` flag, status history.
+- **Notification** — per-recipient in-app notifications with type, link, read state.
+- Plus **Attendance, LeaveRequest, LeaveBalance, LearningResource, Department, AuditLog, Report, Settings**.
 
 ---
 
-## ⚙️ Setup & Installation Guide
+## 📌 Project Status & Roadmap
 
-**Prerequisites:** Node.js (v18+) and a running MongoDB instance (Local or Atlas).
+**Working:** auth + RBAC, admin (users/roles/departments/access matrix/audit/reports), HR (employees/interns/onboarding/attendance/leave/tasks/learning), PMO (projects/tasks/team/monitoring/approvals), employee & intern workspaces, in-app notifications, self-service profiles, user offboarding cascade.
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd OMS
-   ```
+**Known gaps / next steps:**
+- A few pages (Messages/Communication, Documents, Payments, Performance, Status) have frontend UI but no backend yet — to be built or removed.
+- Consolidate the two frontend API clients (`api/` and `utils/api.js`) into one.
+- Harden CORS (allow-list / return clean errors), add automated tests, and move file uploads to durable storage (uploads are ephemeral on Render's free tier).
 
-2. **Backend Setup:**
-   ```bash
-   cd backend
-   npm install
-   ```
-   Create a `.env` file in the `/backend` directory:
-   ```env
-   PORT=5000
-   MONGO_URI=mongodb://localhost:27017/oms
-   JWT_SECRET=your_super_secret_jwt_key
-   ```
-   Start the server:
-   ```bash
-   npm run dev
-   ```
+---
 
-3. **Frontend Setup:**
-   Open a new terminal window:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-4. **Access the Platform:**
-   Navigate to `http://localhost:5173` in your browser. 
-   *(Note: The backend seed script will automatically create an Admin account on first startup).*
+## 🔒 Security Notes
+- JWT auth with access + refresh tokens; passwords hashed with bcrypt.
+- RBAC enforced on both API and UI; audit logging of critical actions.
+- Helmet, rate limiting, and CORS configured; soft-delete preserves history and frees emails for reuse.
